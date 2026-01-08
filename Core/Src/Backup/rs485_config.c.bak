@@ -1,0 +1,107 @@
+/*
+ * rs485_config.c
+ *
+ *  Created on: Jan 8, 2026
+ *      Author: MSI GF63
+ */
+#include "rs485_config.h"
+
+/* -------- Private: CRC16 (Modbus RTU) -------- */
+static uint16_t rs485_crc16(const uint8_t *data, uint16_t length)
+{
+    uint16_t crc = 0xFFFF;
+
+    for (uint16_t i = 0; i < length; i++)
+    {
+        crc ^= data[i];
+        for (uint8_t j = 0; j < 8; j++)
+        {
+            if (crc & 0x0001)
+                crc = (crc >> 1) ^ 0xA001;
+            else
+                crc >>= 1;
+        }
+    }
+    return crc;
+}
+
+/* -------- Private: Direction Control -------- */
+static inline void rs485_tx_enable(void)
+{
+    HAL_GPIO_WritePin(RS485_CTRL_GPIO_Port, RS485_CTRL_Pin, GPIO_PIN_SET);
+}
+
+static inline void rs485_rx_enable(void)
+{
+    HAL_GPIO_WritePin(RS485_CTRL_GPIO_Port, RS485_CTRL_Pin, GPIO_PIN_RESET);
+}
+
+/* -------- Public: Init -------- */
+HAL_StatusTypeDef rs485_init(void)
+{
+    rs485_rx_enable();   // Default to receive mode
+    return HAL_OK;
+}
+
+/* -------- Public: Modbus Read Holding Registers -------- */
+HAL_StatusTypeDef rs485_read_holding_registers(uint16_t start_reg,
+                                               uint16_t reg_count,
+                                               uint8_t *rx_buffer,
+                                               uint16_t rx_len)
+{
+    uint8_t tx_frame[8];
+
+    /* Build Modbus RTU frame */
+    tx_frame[0] = RS485_SLAVE_ADDR;
+    tx_frame[1] = RS485_FUNC_READ_HOLDING;
+    tx_frame[2] = (start_reg >> 8) & 0xFF;
+    tx_frame[3] = start_reg & 0xFF;
+    tx_frame[4] = (reg_count >> 8) & 0xFF;
+    tx_frame[5] = reg_count & 0xFF;
+
+    uint16_t crc = rs485_crc16(tx_frame, 6);
+    tx_frame[6] = crc & 0xFF;
+    tx_frame[7] = (crc >> 8) & 0xFF;
+
+    rs485_tx_enable();
+    HAL_UART_Transmit(&huart2, tx_frame, sizeof(tx_frame), 100);
+
+    /* Wait until transmission is fully complete */
+    while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET);
+
+    rs485_rx_enable();
+
+    /* Receive response */
+    if (HAL_UART_Receive(&huart2, rx_buffer, rx_len, RS485_RX_TIMEOUT_MS) != HAL_OK)
+        return HAL_TIMEOUT;
+
+
+    /* CRC check */
+    uint16_t rx_crc  = (rx_buffer[rx_len - 1] << 8) | rx_buffer[rx_len - 2];
+    uint16_t calc_crc = rs485_crc16(rx_buffer, rx_len - 2);
+
+    if (rx_crc != calc_crc)
+        return HAL_ERROR;
+
+    return HAL_OK;
+}
+
+
+/* USER CODE BEGIN 0 */
+void RS485_Send(uint8_t *data, uint16_t size) {
+    // 1. Enable Transmission Mode (DE/RE High)
+    HAL_GPIO_WritePin(RS485_CTRL_GPIO_Port, RS485_CTRL_Pin, GPIO_PIN_SET);
+
+    // 2. Transmit Data via UART
+    HAL_UART_Transmit(&huart2, data, size, 100);
+
+    // 3. IMPORTANT: Wait for transmission to complete physically
+    // (If you switch too fast, you cut off the last bit!)
+    // We wait for the TC (Transmission Complete) flag, not just TXE.
+    while(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET);
+
+    // 4. Switch back to Receive Mode (DE/RE Low)
+    HAL_GPIO_WritePin(RS485_CTRL_GPIO_Port, RS485_CTRL_Pin, GPIO_PIN_RESET);
+}
+/* USER CODE END 0 */
+

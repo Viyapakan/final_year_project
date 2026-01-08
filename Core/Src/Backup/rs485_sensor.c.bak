@@ -1,0 +1,116 @@
+/*
+ * rs485_sensor.c
+ */
+
+#include "rs485_sensor.h"
+#include <string.h> // For memset
+
+/* ---------------- Helper: CRC16 Calculation ---------------- */
+static uint16_t Modbus_CRC16(const uint8_t *data, uint16_t length)
+{
+    uint16_t crc = 0xFFFF;
+    for (uint16_t pos = 0; pos < length; pos++)
+    {
+        crc ^= data[pos];
+        for (uint8_t i = 0; i < 8; i++)
+        {
+            if (crc & 0x0001)
+                crc = (crc >> 1) ^ 0xA001;
+            else
+                crc >>= 1;
+        }
+    }
+    return crc;
+}
+
+/* ---------------- Helper: Direction Control ---------------- */
+// Sets PA1 HIGH (Transmit Mode)
+static void RS485_SetTxMode(void)
+{
+    HAL_GPIO_WritePin(RS485_CTRL_PORT, RS485_CTRL_PIN, GPIO_PIN_SET);
+}
+
+// Sets PA1 LOW (Receive Mode)
+static void RS485_SetRxMode(void)
+{
+    HAL_GPIO_WritePin(RS485_CTRL_PORT, RS485_CTRL_PIN, GPIO_PIN_RESET);
+}
+
+/* ---------------- Initialization ---------------- */
+void RS485_Init(void)
+{
+    RS485_SetRxMode(); // Ensure we start in Listen Mode
+    // Note: Verify UART2 Baud Rate in .ioc file is 4800!
+}
+
+/* ---------------- Core Reading Function ---------------- */
+HAL_StatusTypeDef RS485_Read_Sensor(float *humidity, float *temperature, float *conductivity)
+{
+    uint8_t txFrame[8];
+    // Modbus RTU Frame: [Addr][Func][Start_H][Start_L][Count_H][Count_L][CRC_L][CRC_H]
+    txFrame[0] = RS485_SLAVE_ADDR;
+    txFrame[1] = RS485_FUNC_READ;
+    txFrame[2] = (RS485_START_ADDR >> 8) & 0xFF;
+    txFrame[3] = RS485_START_ADDR & 0xFF;
+    txFrame[4] = (RS485_REG_COUNT >> 8) & 0xFF;
+    txFrame[5] = RS485_REG_COUNT & 0xFF;
+
+    uint16_t crc = Modbus_CRC16(txFrame, 6);
+    txFrame[6] = crc & 0xFF;
+    txFrame[7] = (crc >> 8) & 0xFF;
+
+    // --- TRANSMIT ---
+    RS485_SetTxMode();
+    if(HAL_UART_Transmit(&huart2, txFrame, 8, 100) != HAL_OK)
+    {
+        RS485_SetRxMode();
+        return HAL_ERROR;
+    }
+
+    // --- IMPORTANT TIMING FIX ---
+    // Wait for the Transmission Complete (TC) flag.
+    // This ensures the last bit has physically left the pin before we switch directions.
+    while(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET);
+
+    // --- SWITCH TO RECEIVE ---
+    RS485_SetRxMode();
+
+    // --- RECEIVE ---
+    // Expected Bytes: Addr(1) + Func(1) + BytesCount(1) + Data(3*2) + CRC(2) = 11 Bytes
+    uint8_t rxBuf[11] = {0};
+
+    // Clear the buffer and flags before receiving to prevent reading old data
+    __HAL_UART_CLEAR_FLAG(&huart2, UART_FLAG_RXNE);
+
+    HAL_StatusTypeDef ret = HAL_UART_Receive(&huart2, rxBuf, 11, 1000); // 1000ms Timeout
+
+    if (ret != HAL_OK)
+    {
+        // Debugging Hook: If you hit this, inspect 'huart2.Instance->SR' in debugger
+        return ret; // Timeout or Error
+    }
+
+    // --- VERIFY CRC ---
+    uint16_t rxCRC  = (rxBuf[10] << 8) | rxBuf[9]; // CRC is at the end (Low byte first)
+    uint16_t calcCRC = Modbus_CRC16(rxBuf, 9);     // Calculate CRC of first 9 bytes
+
+    if (rxCRC != calcCRC)
+    {
+        return HAL_ERROR; // CRC Mismatch
+    }
+
+    // --- PARSE DATA ---
+    // rxBuf[3],[4] = Humidity
+    // rxBuf[5],[6] = Temperature
+    // rxBuf[7],[8] = Conductivity
+
+    uint16_t humRaw  = (rxBuf[3] << 8) | rxBuf[4];
+    uint16_t tempRaw = (rxBuf[5] << 8) | rxBuf[6];
+    uint16_t condRaw = (rxBuf[7] << 8) | rxBuf[8];
+
+    *humidity     = humRaw / 10.0f;
+    *temperature  = tempRaw / 10.0f;
+    *conductivity = condRaw * 1.0f; // Usually raw integer for EC
+
+    return HAL_OK;
+}
