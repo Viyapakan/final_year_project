@@ -28,6 +28,9 @@
 #include "utils.h"
 #include "lora_config.h"
 #include "rs485_config.h"
+
+#include <stdio.h>   // Required for sprintf
+#include <string.h>  // Required for strlen
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,7 +73,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	RS485_SensorReading_t soil;
+	RS485_SensorReading_t currentReading;
+	char lora_tx_buffer[64];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -102,22 +106,43 @@ int main(void)
   }
 
   RS485_Init();
-  if (RS485_ReadSoilSensor(&soil) == HAL_OK)
-  {
-      uint16_t moisture_pct = soil.moisture / 10.0f;
-      uint16_t temp_c       = soil.temperature / 10.0f;
-      uint16_t ec_us     = soil.ec;
-
-      /* Build LoRa payload directly */
-  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+	  // 1. Read the Sensor
+	      if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
+	      {
+	          // 2. Format the data into a string
+	          // NOTE: I am assuming your struct members are raw Integers (uint16_t).
+	          // If your Read function already converts them to floats, remove the "/ 10.0f".
 
+	    	  uint8_t len = sprintf(lora_tx_buffer, "T:%d,M:%u,E:%u",
+	    	                        currentReading.temperature,
+	    	                        currentReading.moisture,
+	    	                        currentReading.ec);
+	          // Resulting String example: "T:24.5,M:55.2,E:1205"
+
+	          // 3. Send via LoRa
+	    	  led_toggle(100,1);
+
+	          lora_send((uint8_t *)lora_tx_buffer, len, 1000);
+
+	          // 4. Print to Debug UART (Optional, to verify locally)
+	          // HAL_UART_Transmit(&huart1, (uint8_t*)lora_tx_buffer, len, 100);
+	      }
+	      else
+	      {
+	          // Handle Sensor Error (Maybe send "Sensor Error" via LoRa?)
+	          char *error_msg = "ERR:Sensor Timeout";
+	          lora_send((uint8_t *)error_msg, strlen(error_msg), 1000);
+	      }
+
+	      // 5. Wait before next read (IMPORTANT for LoRa stability)
+	      HAL_Delay(2000);
+    /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

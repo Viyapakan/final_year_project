@@ -33,7 +33,7 @@ uint16_t lora_init(void)
     myLoRa.spredingFactor        = SF_7;
     myLoRa.bandWidth             = BW_125KHz;
     myLoRa.crcRate               = CR_4_5;
-    myLoRa.power                 = POWER_20db; // or POWER_17db if supply limited
+    myLoRa.power                 = POWER_17db; // or POWER_17db if supply limited
     myLoRa.overCurrentProtection = 130;
     myLoRa.preamble              = 8;
 
