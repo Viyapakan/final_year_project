@@ -1,0 +1,35 @@
+/*
+ * rs485_config.h
+ *
+ *  Created on: Jan 8, 2026
+ *      Author: MSI GF63
+ */
+
+#ifndef INC_RS485_CONFIG_H_
+#define INC_RS485_CONFIG_H_
+
+
+#include "stm32f1xx_hal.h"
+#include "usart.h"
+#include "gpio.h"
+
+/* -------- Modbus Configuration -------- */
+#define RS485_SLAVE_ADDR        0x01
+#define RS485_FUNC_READ_HOLDING 0x03
+
+/* -------- Timing -------- */
+#define RS485_TURNAROUND_DELAY_MS   3
+#define RS485_RX_TIMEOUT_MS         500
+
+/* -------- API -------- */
+HAL_StatusTypeDef rs485_init(void);
+
+HAL_StatusTypeDef rs485_read_holding_registers(uint16_t start_reg,
+                                               uint16_t reg_count,
+                                               uint8_t *rx_buffer,
+                                               uint16_t rx_len);
+
+/* USER CODE BEGIN 0 */
+void RS485_Send(uint8_t *data, uint16_t size);
+
+#endif /* INC_RS485_CONFIG_H_ */

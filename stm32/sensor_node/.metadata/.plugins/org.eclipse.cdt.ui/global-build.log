@@ -1,0 +1,21 @@
+11:07:05 **** Incremental Build of configuration Debug for project xaltrix_actuator ****
+make -j12 all 
+arm-none-eabi-gcc "../Core/Src/sleep/sleep_mode.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/sleep/sleep_mode.d" -MT"Core/Src/sleep/sleep_mode.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/sleep/sleep_mode.o"
+arm-none-eabi-gcc -o "xaltrix_actuator.elf" @"objects.list"   -mcpu=cortex-m3 -T"E:\firmwares\govi_hub_v1\govi_v3_firmwares\xaltrix_actuator\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="xaltrix_actuator.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: xaltrix_actuator.elf
+ 
+arm-none-eabi-size  xaltrix_actuator.elf 
+arm-none-eabi-objdump -h -S xaltrix_actuator.elf  > "xaltrix_actuator.list"
+   text	   data	    bss	    dec	    hex	filename
+  20188	    120	   2464	  22772	   58f4	xaltrix_actuator.elf
+Finished building: default.size.stdout
+ 
+Finished building: xaltrix_actuator.list
+ 
+11:08:51 **** Build of configuration Debug for project s_cap_iot_node ****
+make -j12 all 
+arm-none-eabi-size  s_cap_iot_node.elf 
+   text	   data	    bss	    dec	    hex	filename
+  24712	     92	   2196	  27000	   6978	s_cap_iot_node.elf
+Finished building: default.size.stdout
+ 

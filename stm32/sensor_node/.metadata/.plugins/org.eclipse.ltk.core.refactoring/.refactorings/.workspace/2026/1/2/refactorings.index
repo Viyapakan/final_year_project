@@ -1,0 +1,7 @@
+1767893227418	Delete resource 's_cap_iot_node/Core/Src/rs485_config.c'
+1767893233101	Delete resource 's_cap_iot_node/Core/Src/rs485_sensor.c'
+1767893240631	Delete resource 's_cap_iot_node/Core/Inc/rs485_config.h'
+1767893245441	Delete resource 's_cap_iot_node/Core/Inc/rs485_sensor.h'
+1767902722732	Delete resource 's_cap_iot_node/Core/Inc/app_sensor.h'
+1767902727225	Delete resource 's_cap_iot_node/Core/Inc/app_power.h'
+1767902731480	Delete resource 's_cap_iot_node/Core/Inc/app_lora.h'
