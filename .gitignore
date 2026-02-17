@@ -1,69 +1,10 @@
-# ========================
-# OS junk
-# ========================
+# Arduino build folders
+build/
+bin/
+
+# Private credentials
+config.h
+
+# OS generated files
 .DS_Store
 Thumbs.db
-
-# ========================
-# Python / ML outputs
-# ========================
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pt
-*.pth
-*.onnx
-*.h5
-*.keras
-output/
-photos/
-sd_card/
-
-# ========================
-# ESP32 / PlatformIO / Arduino
-# ========================
-.pio/
-.pioenvs/
-.piolibdeps/
-build/
-*.bin
-*.elf
-*.map
-*.o
-*.a
-*.log
-
-# ========================
-# STM32 (CubeIDE)
-# ========================
-Debug/
-Release/
-*.ioc
-*.hex
-
-# ========================
-# IDEs
-# ========================
-.vscode/
-.idea/
-*.code-workspace
-
-# ========================
-# Documents (very important)
-# ========================
-*.aux
-*.bbl
-*.blg
-*.fls
-*.fdb_latexmk
-*.synctex.gz
-*.toc
-
-# PDFs generated from LaTeX (keep source only)
-*thesis*.pdf
-
-
-output/
-photos/
-sd_card/
