@@ -21,9 +21,24 @@ void setup() {
         led_toggle(10, 50); 
     }
 
+    if (!init_power_sensor()) {
+        led_toggle(5, 200); // Blink slowly if INA226 fails
+    }
+    
     analogSetAttenuation(ADC_11db);
 }
 
 void loop() {
+    float voltage = 0;
+    float current = 0;
 
+    get_power_data(voltage, current);
+
+    Serial.print("Bus Voltage: ");
+    Serial.print(voltage, 3);
+    Serial.print("V | Current: ");
+    Serial.print(current, 3);
+    Serial.println("A");
+
+    delay(2000);
 }
