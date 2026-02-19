@@ -15,8 +15,15 @@ void setup() {
 
     led_on(); // Solid light means we are online
     Serial.println("\nWiFi connected!");
+
+    if (!init_sd_card()) {
+        // If SD card fails, maybe blink LED fast to warn us?
+        led_toggle(10, 50); 
+    }
+
+    analogSetAttenuation(ADC_11db);
 }
 
 void loop() {
-    // Ready for sensors!
+
 }
