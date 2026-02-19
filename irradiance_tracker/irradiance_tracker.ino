@@ -24,21 +24,23 @@ void setup() {
     if (!init_power_sensor()) {
         led_toggle(5, 200); // Blink slowly if INA226 fails
     }
-    
+
     analogSetAttenuation(ADC_11db);
 }
 
 void loop() {
-    float voltage = 0;
-    float current = 0;
-
+    float voltage = 0, current = 0;
     get_power_data(voltage, current);
+    
+    float temp = get_temperature();
 
-    Serial.print("Bus Voltage: ");
-    Serial.print(voltage, 3);
-    Serial.print("V | Current: ");
-    Serial.print(current, 3);
-    Serial.println("A");
+    Serial.print("V: "); Serial.print(voltage, 3);
+    Serial.print("V | Temp: "); Serial.print(temp, 1);
+    Serial.println("C");
 
-    delay(2000);
+    // Update storage to include temperature
+    // You'll need to update log_data in storage.h to accept 'temp'
+    // log_data(voltage, current, temp); 
+
+    delay(5000);
 }
