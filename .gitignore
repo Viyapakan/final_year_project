@@ -8,3 +8,12 @@ config.h
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# ESP-IDF specific ignores
+managed_components/
+dependencies.lock
+sdkconfig
+sdkconfig.old
+
+build
+.vscode
