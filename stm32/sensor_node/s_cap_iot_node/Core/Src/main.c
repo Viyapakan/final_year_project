@@ -104,9 +104,6 @@ int main(void)
     MX_SPI1_Init();
     MX_USART2_UART_Init();
 
-    // Comment this out for now!
-    // MX_RTC_Init();
-
     /* USER CODE BEGIN 2 */
     // 1. Let's catch the exact return value
       uint16_t lora_status = lora_init();
@@ -124,6 +121,9 @@ int main(void)
       }
 
 
+      // 2. Initialize RS485
+        RS485_Init();
+        RS485_SensorReading_t currentReading = {0};
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,7 +131,22 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	  // 3. Give the sensor time to process (sensors are slow)
+	        HAL_Delay(2000);
 
+	        // 4. Try to read the sensor
+	        if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
+	        {
+	            // SENSOR SUCCESS!
+	            // Put a Debugger Breakpoint on the led_toggle line below
+	            // to inspect the 'currentReading' struct values!
+	            led_toggle(500, 1); // 1 Slow flash every 2 seconds
+	        }
+	        else
+	        {
+	            // SENSOR FAIL!
+	            led_on(); // Turn LED solid ON if we can't talk to the sensor
+	        }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
