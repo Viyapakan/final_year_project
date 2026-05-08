@@ -1,0 +1,10 @@
+11:08:51 **** Build of configuration Debug for project s_cap_iot_node ****
+make -j12 all 
+arm-none-eabi-size  s_cap_iot_node.elf 
+   text	   data	    bss	    dec	    hex	filename
+  24712	     92	   2196	  27000	   6978	s_cap_iot_node.elf
+Finished building: default.size.stdout
+ 
+
+11:08:51 Build Finished. 0 errors, 0 warnings. (took 410ms)
+

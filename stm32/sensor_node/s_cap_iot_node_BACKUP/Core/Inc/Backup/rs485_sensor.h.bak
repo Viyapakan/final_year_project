@@ -1,0 +1,43 @@
+/*
+ * rs485_sensor.h
+ * Adapted for SN-3000-ECTH (Humidity, Temp, EC)
+ */
+
+#ifndef __RS485_SENSOR_H__
+#define __RS485_SENSOR_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "main.h"
+#include "usart.h"
+#include <stdio.h>
+
+/* ---------------- Hardcoded Pin Configuration ---------------- */
+// Based on your wiring: Control Pin is PA1
+#define RS485_CTRL_PORT     GPIOA
+#define RS485_CTRL_PIN      GPIO_PIN_1
+
+/* ---------------- Communication Settings ---------------- */
+#define RS485_SLAVE_ADDR    0x01            // Default Address
+#define RS485_FUNC_READ     0x03            // Read Holding Registers
+
+/* ---------------- Register Map (SN-3000 Standard) ---------------- */
+// 0x0000: Humidity (0.1 %)
+// 0x0001: Temperature (0.1 C)
+// 0x0002: Conductivity (1 uS/cm)
+
+#define RS485_START_ADDR    0x0000
+#define RS485_REG_COUNT     0x0003          // Read 3 Registers ONLY (Hum, Temp, EC)
+
+/* ---------------- Function Prototypes ---------------- */
+void RS485_Init(void);
+
+HAL_StatusTypeDef RS485_Read_Sensor(float *humidity, float *temperature, float *conductivity);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __RS485_SENSOR_H__ */
