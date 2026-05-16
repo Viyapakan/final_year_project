@@ -37,9 +37,27 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-/* USER CODE END PTD */
+#define LORA_MAX_PAYLOAD 48  // Max bytes for the flexible payload section
+#define SENSOR_TYPE_SOIL 0x01 // Identifier for RS485 Soil Sensors
+#define SENSOR_TYPE_ENV  0x02 // Example: Identifier for BME280/DHT22
 
-/* Private define ------------------------------------------------------------*/
+// 1. The Generalized LoRa Packet (The "Envelope")
+typedef struct __attribute__((packed)) {
+    uint32_t device_id;                   // 4 bytes: Unique STM32 ID
+    uint8_t  sensor_type;                 // 1 byte: What type of data is inside?
+    uint8_t  payload_length;              // 1 byte: How many bytes is the payload?
+    uint8_t  payload[LORA_MAX_PAYLOAD];   // Variable: The actual sensor data
+} lora_packet_t;
+
+// 2. Specific Payload Format for Soil Sensor (The "Letter")
+// This is your {temp: val, humi: val, ec: val} equivalent
+typedef struct __attribute__((packed)) {
+    uint16_t humidity;
+    int16_t  temperature;
+    uint16_t ec;
+} soil_payload_t;
+
+/* USER CODE END PTD */
 /* USER CODE BEGIN PD */
 
 /* USER CODE END PD */
@@ -57,6 +75,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void Dump_STM32_LoRa_Registers(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -107,6 +126,8 @@ int main(void)
     /* USER CODE BEGIN 2 */
     // 1. Let's catch the exact return value
       uint16_t lora_status = lora_init();
+      // DUMP REGISTERS HERE!
+          Dump_STM32_LoRa_Registers();
 
       // 2. Put a breakpoint on the IF statement below!
       if (lora_status != 0) // Or whatever "success" is in your library (often 1 or 200)
@@ -128,27 +149,51 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-	  // 3. Give the sensor time to process (sensors are slow)
-	        HAL_Delay(2000);
+	while (1)
+	  {
+		/* USER CODE END WHILE */
 
-	        // 4. Try to read the sensor
-	        if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
-	        {
-	            // SENSOR SUCCESS!
-	            // Put a Debugger Breakpoint on the led_toggle line below
-	            // to inspect the 'currentReading' struct values!
-	            led_toggle(500, 1); // 1 Slow flash every 2 seconds
-	        }
-	        else
-	        {
-	            // SENSOR FAIL!
-	            led_on(); // Turn LED solid ON if we can't talk to the sensor
-	        }
-    /* USER CODE BEGIN 3 */
-  }
+			// 1. Wait/Sleep interval
+			HAL_Delay(5000);
+
+			// 2. Read the sensor
+			if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
+			{
+				// 3. Initialize the Generalized Packet
+				lora_packet_t tx_packet = {0}; // Zero out memory
+				tx_packet.device_id = Get_STM32_UniqueID();
+				tx_packet.sensor_type = SENSOR_TYPE_SOIL;
+
+				// 4. Populate the Specific Sensor Payload
+				soil_payload_t soil_data;
+				soil_data.temperature = currentReading.temperature;
+				soil_data.humidity = currentReading.moisture;
+				soil_data.ec = currentReading.ec;
+
+				// 5. Load the Payload into the Envelope
+				tx_packet.payload_length = sizeof(soil_payload_t);
+				memcpy(tx_packet.payload, &soil_data, tx_packet.payload_length);
+
+				// 6. Calculate EXACT transmission size
+				// We only send Header Bytes + The actual size of the populated payload
+				// offsetof() calculates the exact byte position where "payload" starts
+				uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
+
+				// 7. Transmit over LoRa
+				lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+
+				// 8. Visual TX Confirmation: Quick double-flash
+				led_off();
+				led_toggle(50, 2);
+			}
+			else
+			{
+				// Sensor Read Fail - Solid LED
+				led_on();
+			}
+
+		/* USER CODE BEGIN 3 */
+	  }
   /* USER CODE END 3 */
 }
 
@@ -200,7 +245,44 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* USER CODE BEGIN 4 */
 
+void Dump_STM32_LoRa_Registers(void)
+{
+    uint8_t tx_buf[2];
+    uint8_t rx_buf[2];
+    char msg[60];
+
+    sprintf(msg, "\r\n--- STM32 SX1278 Hardware Register Dump ---\r\n");
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+
+    for (uint16_t reg = 0x00; reg <= 0x7F; reg++)
+    {
+        // To READ a register, the MSB must be 0. (reg & 0x7F)
+        tx_buf[0] = reg & 0x7F;
+        tx_buf[1] = 0x00;       // Dummy byte to push the clock
+
+        // Pull CS Low
+        HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_RESET);
+
+        // Transmit Address and Receive Data
+        HAL_SPI_TransmitReceive(&hspi1, tx_buf, rx_buf, 2, 100);
+
+        // Pull CS High
+        HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_SET);
+
+        // Format and print over UART
+        sprintf(msg, "0x%X: 0x%X\r\n", reg, rx_buf[1]);
+        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+
+        HAL_Delay(5); // Small delay so we don't overwhelm the UART buffer
+    }
+
+    sprintf(msg, "-------------------------------------------\r\n\r\n");
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+}
+
+/* USER CODE END 4 */
 /* USER CODE END 4 */
 
 /**

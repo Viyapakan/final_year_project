@@ -66,3 +66,16 @@ void Enter_Standby_RTC(uint32_t seconds)
     // 7. Enter Standby Mode
     HAL_PWR_EnterSTANDBYMode();
 }
+
+
+
+uint32_t Get_STM32_UniqueID(void)
+{
+    // STM32F1xx Unique Device ID register base address
+    uint32_t uid_word0 = *(uint32_t*)0x1FFFF7E8;
+    uint32_t uid_word1 = *(uint32_t*)0x1FFFF7EC;
+    uint32_t uid_word2 = *(uint32_t*)0x1FFFF7F0;
+
+    // Compress 96-bits into a 32-bit ID using XOR
+    return (uid_word0 ^ uid_word1 ^ uid_word2);
+}
