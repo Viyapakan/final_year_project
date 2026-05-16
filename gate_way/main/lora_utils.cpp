@@ -21,11 +21,7 @@ bool init_lora() {
     LoRa.setPins(LORA_NSS, LORA_RST, LORA_DIO0);
     
     // 3. Initialize hardware at target frequency
-    if (!LoRa.begin(LORA_FREQUENCY)) {
-        Serial.println("[ERR] LoRa Hardware Error: Could not communicate with SX1278.");
-        return false;
-    }
-    
+
     // 4. Apply custom radio configurations
     LoRa.setSpreadingFactor(LORA_SPREAD_FACTOR);
     LoRa.setSignalBandwidth(LORA_BANDWIDTH);
@@ -34,6 +30,13 @@ bool init_lora() {
     LoRa.setOCP(LORA_OCP);
     LoRa.setPreambleLength(LORA_PREAMBLE_LEN);
     LoRa.setSyncWord(LORA_SYNC_WORD);
+    
+    if (!LoRa.begin(LORA_FREQUENCY)) {
+        Serial.println("[ERR] LoRa Hardware Error: Could not communicate with SX1278.");
+        return false;
+    }
+    
+    
     
     Serial.println("[INFO] LoRa parameters (SF7, 125kHz, CR4/5, 17dBm) applied successfully.");
     
