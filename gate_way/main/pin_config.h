@@ -3,16 +3,22 @@
 
 #include <Arduino.h>
 
-// Using constexpr instead of #define provides type safety
-// GPIO 2 is the standard built-in blue LED on most ESP32 Dev Modules
+// Built-in LED
 constexpr uint8_t BUILTIN_LED_PIN = 2;
 
-// Pin initialization function
+// --- LoRa SX1278 Pin Configuration ---
+constexpr uint8_t LORA_NSS  = 5;   // SPI Chip Select
+constexpr uint8_t LORA_MOSI = 23;  // SPI MOSI
+constexpr uint8_t LORA_MISO = 19;  // SPI MISO
+constexpr uint8_t LORA_SCK  = 18;  // SPI Clock
+constexpr uint8_t LORA_RST  = 14;  // Hardware Reset
+constexpr uint8_t LORA_DIO0 = 26;  // Hardware Interrupt
+
+// Basic pin initialization function
 inline bool init_pins() {
     pinMode(BUILTIN_LED_PIN, OUTPUT);
-    digitalWrite(BUILTIN_LED_PIN, LOW); // Default to OFF
+    digitalWrite(BUILTIN_LED_PIN, LOW); 
     
-    // Read back to verify initialization
     return digitalRead(BUILTIN_LED_PIN) == LOW;
 }
 
