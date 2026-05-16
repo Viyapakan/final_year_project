@@ -1,5 +1,18 @@
 #include "lora_utils.h"
 
+// Define the FreeRTOS Queue
+QueueHandle_t sensorDataQueue;
+
+// Volatile flag for the ISR to communicate with the main application
+volatile bool lora_packet_ready = false;
+
+// The Interrupt Service Routine (ISR)
+// IRAM_ATTR forces this function into fast RAM instead of Flash memory
+void IRAM_ATTR lora_isr() {
+    lora_packet_ready = true;
+}
+
+
 bool init_lora() {
     // 1. Configure custom SPI pins
     SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
@@ -32,4 +45,60 @@ void debug_lora_registers() {
     // This library function reads every register via SPI and prints the Hex values
     LoRa.dumpRegisters(Serial);
     Serial.println("-------------------------------------\n");
+}
+
+
+void start_lora_rx() {
+    // 1. Update queue to hold the new Envelope struct (54 bytes max per message)
+    sensorDataQueue = xQueueCreate(20, sizeof(lora_packet_t));
+    if (sensorDataQueue == NULL) {
+        Serial.println("[CRITICAL] Failed to create FreeRTOS Sensor Data Queue!");
+        return;
+    }
+
+    pinMode(LORA_DIO0, INPUT);
+    attachInterrupt(digitalPinToInterrupt(LORA_DIO0), lora_isr, RISING);
+
+    LoRa.receive();
+    Serial.println("[INFO] LoRa RX Interrupt Mode Started. Listening for dynamic packets...");
+}
+
+void process_lora_interrupt() {
+    if (!lora_packet_ready) return;
+    lora_packet_ready = false;
+
+    int packetSize = LoRa.parsePacket();
+    
+    // We calculate the exact header size dynamically (should be 6 bytes)
+    int header_size = offsetof(lora_packet_t, payload);
+
+    // Ensure the packet is at least large enough to contain the Envelope header
+    if (packetSize >= header_size) {
+        lora_packet_t rx_packet;
+        memset(&rx_packet, 0, sizeof(lora_packet_t)); // Zero out memory first
+        
+        // Read exact bytes received into our Envelope struct
+        int bytesToRead = (packetSize > sizeof(lora_packet_t)) ? sizeof(lora_packet_t) : packetSize;
+        LoRa.readBytes((uint8_t*)&rx_packet, bytesToRead);
+        
+        int packet_rssi = LoRa.packetRssi();
+
+        // Push the struct into the FreeRTOS queue
+        if (xQueueSend(sensorDataQueue, &rx_packet, 0) != pdPASS) {
+            Serial.println("[WARN] Data Queue Full! Dropping incoming LoRa packet.");
+        } else {
+            // Optional debug check to verify length math
+            if (packetSize != (header_size + rx_packet.payload_length)) {
+                Serial.printf("[WARN] Size mismatch. Received %d bytes, but Header + Payload length = %d\n", 
+                              packetSize, (header_size + rx_packet.payload_length));
+            }
+            // Serial.printf("[RX] Packet queued. RSSI: %d dBm\n", packet_rssi);
+        }
+        
+    } else if (packetSize > 0) {
+        Serial.printf("[WARN] Rogue packet detected. Size: %d bytes (Too small for header)\n", packetSize);
+        while (LoRa.available()) { LoRa.read(); }
+    }
+
+    LoRa.receive();
 }
