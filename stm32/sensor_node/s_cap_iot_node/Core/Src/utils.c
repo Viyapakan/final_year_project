@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "usart.h"
 
 void led_off(void)
 {
@@ -79,3 +80,21 @@ uint32_t Get_STM32_UniqueID(void)
     // Compress 96-bits into a 32-bit ID using XOR
     return (uid_word0 ^ uid_word1 ^ uid_word2);
 }
+
+///* ========================================================== */
+///* ============ PRINTF REDIRECTION TO USART1 ================ */
+///* ========================================================== */
+//
+//// This tells the GCC compiler how to route standard character output
+//#ifdef __GNUC__
+//#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+//#else
+//#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+//#endif
+//
+//PUTCHAR_PROTOTYPE
+//{
+//    // Transmit one character at a time over USART1
+//    HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+//    return ch;
+//}

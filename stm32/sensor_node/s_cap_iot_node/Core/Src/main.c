@@ -16,6 +16,7 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
@@ -26,38 +27,50 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 #include "utils.h"
 #include "lora_config.h"
 #include "rs485_config.h"
 
-#include <stdio.h>   // Required for sprintf
-#include <string.h>  // Required for strlen
+#include <stdio.h>
+#include <string.h>
+#include <stddef.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-#define LORA_MAX_PAYLOAD 48  // Max bytes for the flexible payload section
-#define SENSOR_TYPE_SOIL 0x01 // Identifier for RS485 Soil Sensors
-#define SENSOR_TYPE_ENV  0x02 // Example: Identifier for BME280/DHT22
+#define LORA_MAX_PAYLOAD      48
+#define SENSOR_TYPE_SOIL      0x01
+#define SENSOR_TYPE_ENV       0x02
 
-// 1. The Generalized LoRa Packet (The "Envelope")
-typedef struct __attribute__((packed)) {
-    uint32_t device_id;                   // 4 bytes: Unique STM32 ID
-    uint8_t  sensor_type;                 // 1 byte: What type of data is inside?
-    uint8_t  payload_length;              // 1 byte: How many bytes is the payload?
-    uint8_t  payload[LORA_MAX_PAYLOAD];   // Variable: The actual sensor data
+/* -------------------------------------------------------------------------- */
+/*                          General LoRa Packet Format                        */
+/* -------------------------------------------------------------------------- */
+typedef struct __attribute__((packed))
+{
+    uint32_t device_id;
+    uint8_t  sensor_type;
+    uint8_t  payload_length;
+    uint8_t  payload[LORA_MAX_PAYLOAD];
+
 } lora_packet_t;
 
-// 2. Specific Payload Format for Soil Sensor (The "Letter")
-// This is your {temp: val, humi: val, ec: val} equivalent
-typedef struct __attribute__((packed)) {
+/* -------------------------------------------------------------------------- */
+/*                        Soil Sensor Payload Structure                       */
+/* -------------------------------------------------------------------------- */
+typedef struct __attribute__((packed))
+{
     uint16_t humidity;
     int16_t  temperature;
     uint16_t ec;
+
 } soil_payload_t;
 
 /* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
 /* USER CODE END PD */
@@ -76,6 +89,7 @@ typedef struct __attribute__((packed)) {
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void Dump_STM32_LoRa_Registers(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -91,31 +105,35 @@ void Dump_STM32_LoRa_Registers(void);
   */
 int main(void)
 {
+    /* USER CODE BEGIN 1 */
 
-  /* USER CODE BEGIN 1 */
+    /* USER CODE END 1 */
 
-  /* USER CODE END 1 */
+    /* MCU Configuration------------------------------------------------------*/
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* Reset of all peripherals, Initializes the Flash interface and Systick */
+    HAL_Init();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* USER CODE BEGIN Init */
 
-  /* USER CODE BEGIN Init */
+    /* USER CODE END Init */
 
-  /* USER CODE END Init */
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    /* USER CODE BEGIN SysInit */
 
-  /* USER CODE BEGIN SysInit */
+    /* USER CODE END SysInit */
 
-  /* USER CODE END SysInit */
+    /* Initialize peripherals */
     MX_GPIO_Init();
 
-    // MOVE THIS HERE - If this works, the problem is below this line
+    /* ---------------------------------------------------------------------- */
+    /*                     Basic LED Hardware Verification                     */
+    /* ---------------------------------------------------------------------- */
     led_on();
     HAL_Delay(500);
+
     led_off();
     HAL_Delay(500);
 
@@ -124,77 +142,108 @@ int main(void)
     MX_USART2_UART_Init();
 
     /* USER CODE BEGIN 2 */
-    // 1. Let's catch the exact return value
-      uint16_t lora_status = lora_init();
-      // DUMP REGISTERS HERE!
-          Dump_STM32_LoRa_Registers();
 
-      // 2. Put a breakpoint on the IF statement below!
-      if (lora_status != 0) // Or whatever "success" is in your library (often 1 or 200)
-      {
-          // Success! Flash LED quickly
-          led_toggle(100, 5);
-      }
-      else
-      {
-          // Fail! Turn LED solid ON
-          led_on();
-      }
+    /* ---------------------------------------------------------------------- */
+    /*                           Initialize LoRa                              */
+    /* ---------------------------------------------------------------------- */
+    uint16_t lora_status = lora_init();
 
+    /* Dump SX1278 registers through UART */
+    Dump_STM32_LoRa_Registers();
 
-      // 2. Initialize RS485
-        RS485_Init();
-        RS485_SensorReading_t currentReading = {0};
-  /* USER CODE END 2 */
+    /* LoRa status indication */
+    if (lora_status != 0)
+    {
+        /* Success → Fast LED blink */
+        led_toggle(100, 5);
+    }
+    else
+    {
+        /* Failure → Solid LED ON */
+        led_on();
+    }
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-	while (1)
-	  {
-		/* USER CODE END WHILE */
+    /* ---------------------------------------------------------------------- */
+    /*                         Initialize RS485 Sensor                         */
+    /* ---------------------------------------------------------------------- */
+    RS485_Init();
 
-			// 1. Wait/Sleep interval
-			HAL_Delay(5000);
+    RS485_SensorReading_t currentReading = {0};
 
-			// 2. Read the sensor
-			if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
-			{
-				// 3. Initialize the Generalized Packet
-				lora_packet_t tx_packet = {0}; // Zero out memory
-				tx_packet.device_id = Get_STM32_UniqueID();
-				tx_packet.sensor_type = SENSOR_TYPE_SOIL;
+    /* USER CODE END 2 */
 
-				// 4. Populate the Specific Sensor Payload
-				soil_payload_t soil_data;
-				soil_data.temperature = currentReading.temperature;
-				soil_data.humidity = currentReading.moisture;
-				soil_data.ec = currentReading.ec;
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+    while (1)
+    {
+        /* USER CODE END WHILE */
 
-				// 5. Load the Payload into the Envelope
-				tx_packet.payload_length = sizeof(soil_payload_t);
-				memcpy(tx_packet.payload, &soil_data, tx_packet.payload_length);
+        /* USER CODE BEGIN 3 */
 
-				// 6. Calculate EXACT transmission size
-				// We only send Header Bytes + The actual size of the populated payload
-				// offsetof() calculates the exact byte position where "payload" starts
-				uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
+        /* ------------------------------------------------------------------ */
+        /*                         Sensor Read Interval                       */
+        /* ------------------------------------------------------------------ */
+        HAL_Delay(5000);
 
-				// 7. Transmit over LoRa
-				lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+        /* ------------------------------------------------------------------ */
+        /*                         Read Soil Sensor                           */
+        /* ------------------------------------------------------------------ */
+        if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
+        {
+            /* -------------------------------------------------------------- */
+            /*                    Create LoRa Packet                          */
+            /* -------------------------------------------------------------- */
+            lora_packet_t tx_packet = {0};
 
-				// 8. Visual TX Confirmation: Quick double-flash
-				led_off();
-				led_toggle(50, 2);
-			}
-			else
-			{
-				// Sensor Read Fail - Solid LED
-				led_on();
-			}
+            tx_packet.device_id   = Get_STM32_UniqueID();
+            tx_packet.sensor_type = SENSOR_TYPE_SOIL;
 
-		/* USER CODE BEGIN 3 */
-	  }
-  /* USER CODE END 3 */
+            /* -------------------------------------------------------------- */
+            /*                  Populate Soil Sensor Payload                  */
+            /* -------------------------------------------------------------- */
+            soil_payload_t soil_data;
+
+            soil_data.temperature = currentReading.temperature;
+            soil_data.humidity    = currentReading.moisture;
+            soil_data.ec          = currentReading.ec;
+
+            /* -------------------------------------------------------------- */
+            /*                Copy Payload into LoRa Packet                   */
+            /* -------------------------------------------------------------- */
+            tx_packet.payload_length = sizeof(soil_payload_t);
+
+            memcpy(
+                tx_packet.payload,
+                &soil_data,
+                tx_packet.payload_length
+            );
+
+            /* -------------------------------------------------------------- */
+            /*               Calculate Actual Transmission Size               */
+            /* -------------------------------------------------------------- */
+            uint8_t tx_size =
+                offsetof(lora_packet_t, payload) +
+                tx_packet.payload_length;
+
+            /* -------------------------------------------------------------- */
+            /*                       Send via LoRa                            */
+            /* -------------------------------------------------------------- */
+            lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+
+            /* -------------------------------------------------------------- */
+            /*                    Transmission Indication                     */
+            /* -------------------------------------------------------------- */
+            led_off();
+            led_toggle(50, 2);
+        }
+        else
+        {
+            /* Sensor Read Failed */
+            led_on();
+        }
+
+    }
+    /* USER CODE END 3 */
 }
 
 /**
@@ -203,86 +252,136 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /** Initializes the RCC Oscillators */
+    RCC_OscInitStruct.OscillatorType =
+        RCC_OSCILLATORTYPE_LSI |
+        RCC_OSCILLATORTYPE_HSE;
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+    RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /** Initializes CPU, AHB and APB buses clocks */
+    RCC_ClkInitStruct.ClockType =
+        RCC_CLOCKTYPE_HCLK   |
+        RCC_CLOCKTYPE_SYSCLK |
+        RCC_CLOCKTYPE_PCLK1  |
+        RCC_CLOCKTYPE_PCLK2;
+
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+    if (HAL_RCC_ClockConfig(
+            &RCC_ClkInitStruct,
+            FLASH_LATENCY_2) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+        Error_Handler();
+    }
 }
 
 /* USER CODE BEGIN 4 */
-/* USER CODE BEGIN 4 */
 
+/* -------------------------------------------------------------------------- */
+/*                      SX1278 Register Dump Function                         */
+/* -------------------------------------------------------------------------- */
 void Dump_STM32_LoRa_Registers(void)
 {
     uint8_t tx_buf[2];
     uint8_t rx_buf[2];
+
     char msg[60];
 
-    sprintf(msg, "\r\n--- STM32 SX1278 Hardware Register Dump ---\r\n");
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    sprintf(
+        msg,
+        "\r\n--- STM32 SX1278 Hardware Register Dump ---\r\n"
+    );
+
+    HAL_UART_Transmit(
+        &huart2,
+        (uint8_t *)msg,
+        strlen(msg),
+        100
+    );
 
     for (uint16_t reg = 0x00; reg <= 0x7F; reg++)
     {
-        // To READ a register, the MSB must be 0. (reg & 0x7F)
+        /* Read operation: MSB = 0 */
         tx_buf[0] = reg & 0x7F;
-        tx_buf[1] = 0x00;       // Dummy byte to push the clock
+        tx_buf[1] = 0x00;
 
-        // Pull CS Low
-        HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_RESET);
+        /* NSS LOW */
+        HAL_GPIO_WritePin(
+            LORA_NSS_GPIO_Port,
+            LORA_NSS_Pin,
+            GPIO_PIN_RESET
+        );
 
-        // Transmit Address and Receive Data
-        HAL_SPI_TransmitReceive(&hspi1, tx_buf, rx_buf, 2, 100);
+        /* SPI Transfer */
+        HAL_SPI_TransmitReceive(
+            &hspi1,
+            tx_buf,
+            rx_buf,
+            2,
+            100
+        );
 
-        // Pull CS High
-        HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_SET);
+        /* NSS HIGH */
+        HAL_GPIO_WritePin(
+            LORA_NSS_GPIO_Port,
+            LORA_NSS_Pin,
+            GPIO_PIN_SET
+        );
 
-        // Format and print over UART
-        sprintf(msg, "0x%X: 0x%X\r\n", reg, rx_buf[1]);
-        HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+        /* Print Register Value */
+        sprintf(msg, "0x%02X : 0x%02X\r\n", reg, rx_buf[1]);
 
-        HAL_Delay(5); // Small delay so we don't overwhelm the UART buffer
+        HAL_UART_Transmit(
+            &huart2,
+            (uint8_t *)msg,
+            strlen(msg),
+            100
+        );
+
+        HAL_Delay(5);
     }
 
-    sprintf(msg, "-------------------------------------------\r\n\r\n");
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 100);
+    sprintf(
+        msg,
+        "-------------------------------------------\r\n\r\n"
+    );
+
+    HAL_UART_Transmit(
+        &huart2,
+        (uint8_t *)msg,
+        strlen(msg),
+        100
+    );
 }
 
-/* USER CODE END 4 */
 /* USER CODE END 4 */
 
 /**
@@ -291,27 +390,35 @@ void Dump_STM32_LoRa_Registers(void)
   */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+    /* USER CODE BEGIN Error_Handler_Debug */
+
+    __disable_irq();
+
+    while (1)
+    {
+    }
+
+    /* USER CODE END Error_Handler_Debug */
 }
+
 #ifdef USE_FULL_ASSERT
+
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
+  * @brief  Reports the source file name and source line number
+  *         where assert_param error has occurred.
+  * @param  file: pointer to source file name
   * @param  line: assert_param error line source number
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+    /* USER CODE BEGIN 6 */
+
+    /* Example:
+       printf("Wrong parameters value: file %s on line %d\r\n", file, line);
+    */
+
+    /* USER CODE END 6 */
 }
+
 #endif /* USE_FULL_ASSERT */

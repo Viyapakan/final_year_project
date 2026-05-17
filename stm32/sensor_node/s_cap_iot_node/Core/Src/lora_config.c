@@ -36,7 +36,7 @@ uint16_t lora_init(void)
     myLoRa.power                 = POWER_17db; // or POWER_17db if supply limited
     myLoRa.overCurrentProtection = 130;
     myLoRa.preamble              = 8;
-//    myLoRa.crc = 1;          // ADD THIS! explicitly enable payload CRC
+
 
 
     return LoRa_init(&myLoRa);

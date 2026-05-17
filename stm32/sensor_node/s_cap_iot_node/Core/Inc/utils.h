@@ -10,6 +10,7 @@
 #include "gpio.h"
 #include "rtc.h"
 #include "stm32f1xx_hal.h"
+#include "stdio.h"
 
 void led_on(void);
 void led_off(void);

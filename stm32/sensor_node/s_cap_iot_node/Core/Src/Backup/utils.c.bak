@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "usart.h"
 
 void led_off(void)
 {
@@ -22,35 +23,78 @@ void led_toggle(uint32_t delay_ms, uint8_t times)
 }
 
 
-/* Add this function near other user functions */
-void Enter_Standby_RTC(uint32_t seconds) {
-    // 1. Enable Power and Backup Interface clocks
+void Enter_Standby_RTC(uint32_t seconds)
+{
+    // 1. Enable Power Clock & Backup Access
     __HAL_RCC_PWR_CLK_ENABLE();
-    __HAL_RCC_BKP_CLK_ENABLE();
     HAL_PWR_EnableBkUpAccess();
 
-    // 2. Set the RTC Alarm
-    // The F103 RTC is a simple counter. We read current, add delay, set alarm.
-    RTC_AlarmTypeDef sAlarm = {0};
-    RTC_TimeTypeDef sTime = {0};
+    // 2. DISABLE the WKUP Pin (PA0) to avoid noise waking us up
+    HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
 
-    // Get current counter value
-    uint32_t current_counter = RTC->CNTH << 16 | RTC->CNTL;
+    // 3. Wait for RTC registers to synchronize (Critical for F103)
+    // We must wait for the RSF bit to be set before reading/writing
+    while (!(RTC->CRL & RTC_CRL_RSF));
+
+    // 4. Calculate Alarm Time
+    // On F103, CNTH/CNTL are the current counter values
+    uint32_t current_counter = (RTC->CNTH << 16) | RTC->CNTL;
     uint32_t alarm_counter = current_counter + seconds;
 
-    sAlarm.AlarmTime.Hours = 0; // Not used in F103 simple counter mode usually,
-    sAlarm.AlarmTime.Minutes = 0; // but HAL structure requires it.
-    sAlarm.AlarmTime.Seconds = 0;
-    sAlarm.Alarm = alarm_counter; // This is what matters for F103
+    // 5. Set the Alarm
+    RTC_AlarmTypeDef sAlarm = {0};
+    sAlarm.Alarm = alarm_counter;
 
-    // Configure the Alarm
-    if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN) != HAL_OK) {
+    // HAL_RTC_SetAlarm_IT automatically handles the RTOFF wait
+    if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN) != HAL_OK)
+    {
         Error_Handler();
     }
 
-    // 3. Clear the Wakeup Flag (WUF) so we can sleep again later
+    // 6. CLEAR FLAGS (The Source of the "Fast Loop" Bug)
+
+    // A. Clear Power Wakeup Flag
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
-    // 4. Enter Standby Mode
+    // B. Clear RTC Alarm Flag
+    // IMPORTANT: For F103, we must wait for the previous write to finish first!
+    while (!(RTC->CRL & RTC_CRL_RTOFF));
+    __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+
+    // C. Wait for the Clear command to actually finish
+    while (!(RTC->CRL & RTC_CRL_RTOFF));
+
+    // 7. Enter Standby Mode
     HAL_PWR_EnterSTANDBYMode();
+}
+
+
+
+uint32_t Get_STM32_UniqueID(void)
+{
+    // STM32F1xx Unique Device ID register base address
+    uint32_t uid_word0 = *(uint32_t*)0x1FFFF7E8;
+    uint32_t uid_word1 = *(uint32_t*)0x1FFFF7EC;
+    uint32_t uid_word2 = *(uint32_t*)0x1FFFF7F0;
+
+    // Compress 96-bits into a 32-bit ID using XOR
+    return (uid_word0 ^ uid_word1 ^ uid_word2);
+}
+
+/* ========================================================== */
+/* ============ PRINTF REDIRECTION TO USART1 ================ */
+/* ========================================================== */
+
+// This tells the GCC compiler how to route standard character output
+#ifdef __GNUC__
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#else
+#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#endif
+
+PUTCHAR_PROTOTYPE
+{
+    // Transmit one character at a time over USART1
+    HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+    return ch;
 }
