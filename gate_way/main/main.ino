@@ -2,10 +2,14 @@
 #include "utils.h"
 #include "lora_utils.h"
 #include "app_types.h"
+#include "wifi_manager.h"
 
 void setup() {
+
     Serial.begin(115200);
-    delay(1000); 
+
+    delay(1000);
+
     Serial.println("\n--- ESP32 Gateway Booting ---");
 
     if (!init_pins()) {
@@ -19,7 +23,28 @@ void setup() {
     }
 
     start_lora_rx();
-    Serial.println("[INFO] Boot sequence complete. Entering main loop...\n");
+
+    // -------------------------------------------------------------------------
+    // Initialize WiFi
+    // -------------------------------------------------------------------------
+    if (!wifi_init()) {
+        Serial.println("[CRITICAL] WiFi initialization failed.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Create WiFi Monitoring Task
+    // -------------------------------------------------------------------------
+    xTaskCreatePinnedToCore(
+        wifi_monitor_task,
+        "WiFi Monitor Task",
+        4096,
+        NULL,
+        1,
+        NULL,
+        0
+    );
+
+    Serial.println("[INFO] Boot sequence complete.\n");
 }
 
 void loop() {
