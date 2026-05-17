@@ -92,100 +92,61 @@ int main(void)
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
+    MX_GPIO_Init();
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_SPI1_Init();
-  MX_USART2_UART_Init();
-  MX_RTC_Init();
-  /* USER CODE BEGIN 2 */
+    // MOVE THIS HERE - If this works, the problem is below this line
+    led_on();
+    HAL_Delay(500);
+    led_off();
+    HAL_Delay(500);
+
+    MX_DMA_Init();
+    MX_SPI1_Init();
+    MX_USART2_UART_Init();
+
+    /* USER CODE BEGIN 2 */
+    // 1. Let's catch the exact return value
+      uint16_t lora_status = lora_init();
+
+      // 2. Put a breakpoint on the IF statement below!
+      if (lora_status != 0) // Or whatever "success" is in your library (often 1 or 200)
+      {
+          // Success! Flash LED quickly
+          led_toggle(100, 5);
+      }
+      else
+      {
+          // Fail! Turn LED solid ON
+          led_on();
+      }
 
 
-	led_off();
-	RS485_SensorReading_t currentReading = {0};
-	char lora_tx_buffer[64] = {0};
-
-	// 1. Check Wakeup Flag
-    if (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET) {
-        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
-        // Optional: Blink differently here to indicate "I just woke up!"
-    }
-
-    // 2. Init Drivers
-    // IMPORTANT: Ensure lora_init() toggles the RESET pin of the LoRa module!
-    lora_init();
-    RS485_Init();
-
-    // Give the RS485 sensor a moment to wake up (Sensors are slow!)
-    HAL_Delay(100);
-
-    // 3. DO THE WORK
-    if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
-    {
-        uint8_t len = sprintf(lora_tx_buffer, "T:%d,M:%u,E:%u",
-                              currentReading.temperature,
-                              currentReading.moisture,
-                              currentReading.ec);
-
-        led_toggle(100, 1);
-        lora_send((uint8_t *)lora_tx_buffer, len, 1000);
-
-        // Wait for LoRa to finish (Safety buffer)
-        HAL_Delay(200);
-    }
-    else
-    {
-        // --- FIX 3: Handle Sensor Failure Gracefully ---
-        // If the sensor fails, don't hang. Send an error so you KNOW it's alive.
-        char *err = "ERR:Sensor";
-        lora_send((uint8_t *)err, 10, 1000);
-
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // LED ON
-        HAL_Delay(200);
-    }
-
-    // 4. GO TO SLEEP
-//    Enter_Standby_RTC(60);
-
+      // 2. Initialize RS485
+        RS485_Init();
+        RS485_SensorReading_t currentReading = {0};
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  // 1. Read the Sensor
-//	      if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
-//	      {
-//	          // 2. Format the data into a string
-//	          // NOTE: I am assuming your struct members are raw Integers (uint16_t).
-//	          // If your Read function already converts them to floats, remove the "/ 10.0f".
-//
-//	    	  uint8_t len = sprintf(lora_tx_buffer, "T:%d,M:%u,E:%u",
-//	    	                        currentReading.temperature,
-//	    	                        currentReading.moisture,
-//	    	                        currentReading.ec);
-//	          // Resulting String example: "T:24.5,M:55.2,E:1205"
-//
-//	          // 3. Send via LoRa
-//	    	  led_toggle(100,1);
-//
-//	          lora_send((uint8_t *)lora_tx_buffer, len, 1000);
-//
-//	          // 4. Print to Debug UART (Optional, to verify locally)
-//	          // HAL_UART_Transmit(&huart1, (uint8_t*)lora_tx_buffer, len, 100);
-//	      }
-//	      else
-//	      {
-//	          // Handle Sensor Error (Maybe send "Sensor Error" via LoRa?)
-//	          char *error_msg = "ERR:Sensor Timeout";
-//	          lora_send((uint8_t *)error_msg, strlen(error_msg), 1000);
-//	      }
-//
-//	      // 5. Wait before next read (IMPORTANT for LoRa stability)
-//	      HAL_Delay(2000);
     /* USER CODE END WHILE */
+	  // 3. Give the sensor time to process (sensors are slow)
+	        HAL_Delay(2000);
 
+	        // 4. Try to read the sensor
+	        if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
+	        {
+	            // SENSOR SUCCESS!
+	            // Put a Debugger Breakpoint on the led_toggle line below
+	            // to inspect the 'currentReading' struct values!
+	            led_toggle(500, 1); // 1 Slow flash every 2 seconds
+	        }
+	        else
+	        {
+	            // SENSOR FAIL!
+	            led_on(); // Turn LED solid ON if we can't talk to the sensor
+	        }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
