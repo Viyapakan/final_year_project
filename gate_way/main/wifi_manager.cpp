@@ -31,6 +31,21 @@ bool wifi_init()
     Serial.print("[WIFI] IP Address: ");
     Serial.println(WiFi.localIP());
 
+    // ---------------------------------------------------------
+    // NEW: Sync Time via NTP for TLS/SSL Certificates
+    // ---------------------------------------------------------
+    Serial.println("[WIFI] Syncing time via NTP...");
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    
+    time_t now = time(nullptr);
+    while (now < 24 * 3600) {
+        Serial.print(".");
+        delay(500);
+        now = time(nullptr);
+    }
+    Serial.println("\n[WIFI] Time synchronized.");
+    // ---------------------------------------------------------
+
     return true;
 }
 
