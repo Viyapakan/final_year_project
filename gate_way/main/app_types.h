@@ -6,6 +6,8 @@
 #define LORA_MAX_PAYLOAD 48
 #define SENSOR_TYPE_SOIL 0x01
 #define SENSOR_TYPE_ENV  0x02 // For future expansion
+#define MQTT_MAX_TOPIC_LEN 64
+#define MQTT_MAX_PAYLOAD_LEN 512
 
 // 1. The Gateway "Envelope" (Total header size: 6 bytes)
 typedef struct __attribute__((packed)) {
@@ -21,5 +23,12 @@ typedef struct __attribute__((packed)) {
     int16_t  temperature;
     uint16_t ec;
 } soil_payload_t;
+
+
+// 3. Specific Payload Format for MQTT Message
+typedef struct {
+    char topic[MQTT_MAX_TOPIC_LEN];
+    char payload[MQTT_MAX_PAYLOAD_LEN];
+} mqtt_message_t;
 
 #endif // APP_TYPES_H

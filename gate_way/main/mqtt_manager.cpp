@@ -3,30 +3,50 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
-
+#include "app_types.h"
 // -----------------------------------------------------------------------------
 // Global Instances
 // -----------------------------------------------------------------------------
 WiFiClientSecure secure_client;
 PubSubClient mqtt_client(secure_client);
 
+
+// Create the global queue handle
+QueueHandle_t mqttPublishQueue;
+
+
 // -----------------------------------------------------------------------------
 // Initialize MQTT
 // -----------------------------------------------------------------------------
+// bool mqtt_init()
+// {
+//     Serial.println("[MQTT] Initializing Secure MQTT Client...");
+
+//     // secure_client.setInsecure(); // Keep this on for now to rule out certificates
+//     secure_client.setCACert(ca_cert);
+//     // Increase timeouts for Cellular/4G networks
+//     secure_client.setTimeout(15000); 
+
+//     mqtt_client.setServer(MQTT_BROKER, MQTT_PORT);
+    
+//     // Increase KeepAlive to prevent dropping over mobile networks
+//     mqtt_client.setKeepAlive(60); 
+    
+//     mqtt_client.setBufferSize(512);
+
+//     return true;
+// }
 bool mqtt_init()
 {
     Serial.println("[MQTT] Initializing Secure MQTT Client...");
 
-    // secure_client.setInsecure(); // Keep this on for now to rule out certificates
-    secure_client.setCACert(ca_cert);
-    // Increase timeouts for Cellular/4G networks
-    secure_client.setTimeout(15000); 
+    // Create the Outbound Queue (Holds up to 10 messages at a time)
+    mqttPublishQueue = xQueueCreate(10, sizeof(mqtt_message_t));
 
+    secure_client.setCACert(ca_cert);
+    secure_client.setTimeout(15000); 
     mqtt_client.setServer(MQTT_BROKER, MQTT_PORT);
-    
-    // Increase KeepAlive to prevent dropping over mobile networks
     mqtt_client.setKeepAlive(60); 
-    
     mqtt_client.setBufferSize(512);
 
     return true;
@@ -103,6 +123,40 @@ void mqtt_monitor_task(void *parameter)
             vTaskDelay(pdMS_TO_TICKS(10)); 
         } else {
             vTaskDelay(pdMS_TO_TICKS(MQTT_RETRY_INTERVAL_MS));
+        }
+    }
+}
+
+
+
+// -----------------------------------------------------------------------------
+// NEW: Dedicated MQTT Publish Task
+// -----------------------------------------------------------------------------
+void mqtt_publish_task(void *parameter)
+{
+    mqtt_message_t outgoing_msg;
+
+    while (true)
+    {
+        // Wait indefinitely until a message is placed in the queue
+        if (xQueueReceive(mqttPublishQueue, &outgoing_msg, portMAX_DELAY) == pdPASS) {
+            
+            // Only attempt to publish if connected
+            if (mqtt_client.connected()) {
+                
+                Serial.print("[MQTT-TASK] Publishing to: ");
+                Serial.println(outgoing_msg.topic);
+                
+                if (mqtt_publish(outgoing_msg.topic, outgoing_msg.payload)) {
+                    Serial.println("[MQTT-TASK] Publish SUCCESS");
+                } else {
+                    Serial.println("[MQTT-TASK] Publish FAILED");
+                }
+            } else {
+                Serial.println("[MQTT-TASK] Client disconnected. Message dropped.");
+                // Note: For extreme reliability, you could put the message BACK 
+                // into the queue here if the connection is down.
+            }
         }
     }
 }
