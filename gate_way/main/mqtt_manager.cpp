@@ -17,8 +17,8 @@ bool mqtt_init()
 {
     Serial.println("[MQTT] Initializing Secure MQTT Client...");
 
-    secure_client.setInsecure(); // Keep this on for now to rule out certificates
-
+    // secure_client.setInsecure(); // Keep this on for now to rule out certificates
+    secure_client.setCACert(ca_cert);
     // Increase timeouts for Cellular/4G networks
     secure_client.setTimeout(15000); 
 

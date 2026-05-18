@@ -3,13 +3,10 @@
 #include "lora_utils.h"
 #include "app_types.h"
 #include "wifi_manager.h"
-
+#include "mqtt_manager.h"
 void setup() {
-
     Serial.begin(115200);
-
     delay(1000);
-
     Serial.println("\n--- ESP32 Gateway Booting ---");
 
     if (!init_pins()) {
@@ -32,17 +29,19 @@ void setup() {
     }
 
     // -------------------------------------------------------------------------
-    // Create WiFi Monitoring Task
+    // Initialize MQTT (THIS WAS MISSING!)
     // -------------------------------------------------------------------------
-    xTaskCreatePinnedToCore(
-        wifi_monitor_task,
-        "WiFi Monitor Task",
-        4096,
-        NULL,
-        1,
-        NULL,
-        0
-    );
+    if (!mqtt_init()) {
+        Serial.println("[CRITICAL] MQTT initialization failed.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Create Tasks
+    // -------------------------------------------------------------------------
+    xTaskCreatePinnedToCore(wifi_monitor_task, "WiFi Monitor Task", 4096, NULL, 1, NULL, 0);
+    
+    // Kept at 8192 for TLS!
+    xTaskCreatePinnedToCore(mqtt_monitor_task, "MQTT Monitor Task", 8192, NULL, 1, NULL, 1); 
 
     Serial.println("[INFO] Boot sequence complete.\n");
 }
