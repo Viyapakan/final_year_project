@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "i2c.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -29,7 +30,7 @@
 #include "utils.h"
 #include "lora_config.h"
 #include "rs485_config.h"
-
+#include "sht30_config.h"
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
@@ -63,9 +64,16 @@ typedef struct __attribute__((packed))
     uint16_t humidity;
     int16_t  temperature;
     uint16_t ec;
-
 } soil_payload_t;
 
+/* -------------------------------------------------------------------------- */
+/* Environment Sensor Payload Structure                    */
+/* -------------------------------------------------------------------------- */
+typedef struct __attribute__((packed))
+{
+    uint16_t humidity;
+    int16_t  temperature;
+} env_payload_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -128,6 +136,7 @@ int main(void)
   MX_SPI1_Init();
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   printf("\r\n\r\n=== System Booting ===\r\n");
   // THIS DELAY IS CRITICAL FOR LORA!
@@ -158,9 +167,10 @@ int main(void)
     /* ---------------------------------------------------------------------- */
     /*                         Initialize RS485 Sensor                         */
     /* ---------------------------------------------------------------------- */
-    RS485_Init();
-
-    RS485_SensorReading_t currentReading = {0};
+//    RS485_Init();
+//    RS485_SensorReading_t currentReading = {0};
+    SHT30_Init();
+    SHT30_SensorReading_t currentReading = {0};
     printf("\r\n\r\n=== While Loop Execution from this point! ===\r\n");
   /* USER CODE END 2 */
 
@@ -171,86 +181,48 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+        if(SHT30_ReadSensor(&currentReading)==HAL_OK){
+        	lora_packet_t tx_packet = {0};
+        	tx_packet.device_id   = Get_STM32_UniqueID();
+        	tx_packet.sensor_type = SENSOR_TYPE_ENV;
+			env_payload_t sensor_data;
+			sensor_data.temperature = currentReading.temperature;
+			sensor_data.humidity    = currentReading.humidity;
 
-        /* ------------------------------------------------------------------ */
-        /*                         Sensor Read Interval                       */
-        /* ------------------------------------------------------------------ */
-        HAL_Delay(25000);
+			tx_packet.payload_length = sizeof(env_payload_t);
+			memcpy(tx_packet.payload, &sensor_data, tx_packet.payload_length);
 
-        /* ------------------------------------------------------------------ */
-        /*                         Read Soil Sensor                           */
-        /* ------------------------------------------------------------------ */
-        if (RS485_ReadSoilSensor(&currentReading) == HAL_OK)
-        {
-            /* -------------------------------------------------------------- */
-            /*                    Create LoRa Packet                          */
-            /* -------------------------------------------------------------- */
-            lora_packet_t tx_packet = {0};
+			/* -------------------------------------------------------------- */
+			/* Calculate Actual Transmission Size               */
+			/* -------------------------------------------------------------- */
+			uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
 
-            tx_packet.device_id   = Get_STM32_UniqueID();
-            tx_packet.sensor_type = SENSOR_TYPE_SOIL;
+			/* -------------------------------------------------------------- */
+			/* Send via LoRa                            */
+			/* -------------------------------------------------------------- */
+			lora_send((uint8_t *)&tx_packet, tx_size, 1000);
 
-            /* -------------------------------------------------------------- */
-            /*                  Populate Soil Sensor Payload                  */
-            /* -------------------------------------------------------------- */
-            soil_payload_t soil_data;
+			/* -------------------------------------------------------------- */
+			/* Transmission Indication                     */
+			/* -------------------------------------------------------------- */
+			printf("\r\n========== LoRa Packet Sent ==========\r\n");
+			printf("Device ID     : %lu\r\n", tx_packet.device_id);
+			printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
+			printf("Payload Length: %u\r\n", tx_packet.payload_length);
 
-            soil_data.temperature = currentReading.temperature;
-            soil_data.humidity    = currentReading.moisture;
-            soil_data.ec          = currentReading.ec;
+			printf("\r\n--- Sensor Data ---\r\n");
+			// Divide by 100 for display formatting
+			printf("Temperature : %.2f C\r\n", (float)sensor_data.temperature / 100.0f);
+			printf("Humidity    : %.2f %%\r\n", (float)sensor_data.humidity / 100.0f);
+			printf("\r\n======================================\r\n\r\n");
 
-            /* -------------------------------------------------------------- */
-            /*                Copy Payload into LoRa Packet                   */
-            /* -------------------------------------------------------------- */
-            tx_packet.payload_length = sizeof(soil_payload_t);
-
-            memcpy(
-                tx_packet.payload,
-                &soil_data,
-                tx_packet.payload_length
-            );
-
-            /* -------------------------------------------------------------- */
-            /*               Calculate Actual Transmission Size               */
-            /* -------------------------------------------------------------- */
-            uint8_t tx_size =
-                offsetof(lora_packet_t, payload) +
-                tx_packet.payload_length;
-
-            /* -------------------------------------------------------------- */
-            /*                       Send via LoRa                            */
-            /* -------------------------------------------------------------- */
-            lora_send((uint8_t *)&tx_packet, tx_size, 1000);
-
-            /* -------------------------------------------------------------- */
-            /*                    Transmission Indication                     */
-            /* -------------------------------------------------------------- */
-            printf("\r\n========== LoRa Packet Sent ==========\r\n");
-
-            printf("Device ID     : %lu\r\n", tx_packet.device_id);
-            printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
-            printf("Payload Length: %u\r\n", tx_packet.payload_length);
-
-            printf("\r\n--- Soil Sensor Data ---\r\n");
-
-            printf("Temperature : %d\r\n", soil_data.temperature);
-            printf("Humidity    : %u\r\n", soil_data.humidity);
-            printf("EC           : %u\r\n", soil_data.ec);
-
-            printf("\r\n--- Raw Packet Bytes ---\r\n");
-
-            for(uint8_t i = 0; i < tx_size; i++)
-            {
-                printf("0x%02X ", ((uint8_t *)&tx_packet)[i]);
-            }
-
-            printf("\r\n======================================\r\n\r\n");
-            led_off();
-            led_toggle(50, 2);
+			led_off();
+			led_toggle(50, 2);
         }
         else
         {
             /* Sensor Read Failed */
+        	printf("Sensor Read Failed");
             led_on();
         }
 
