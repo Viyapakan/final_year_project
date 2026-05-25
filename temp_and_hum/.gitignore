@@ -1,0 +1,17 @@
+# STM32CubeIDE Build Folders
+Debug/
+Release/
+build/
+bin/
+
+# Eclipse/CubeIDE Metadata (Optional: keep these if you want project settings saved)
+.settings/
+.mxproject
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Note: DO NOT ignore .ioc, .project, or .cproject files! 
+# You need them to open the project in CubeIDE.
+*.launch
