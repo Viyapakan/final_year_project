@@ -21,6 +21,7 @@
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
+#include "rtc.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -33,6 +34,7 @@
 #include "rs485_config.h"
 #include "sht30_config.h"
 #include "battery_monitor.h"
+#include "power_management.h"
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
@@ -136,42 +138,108 @@ int main(void)
   MX_DMA_Init();
   MX_SPI1_Init();
   MX_USART2_UART_Init();
+  MX_RTC_Init();
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  printf("\r\n\r\n=== System Booting ===\r\n");
-  // THIS DELAY IS CRITICAL FOR LORA!
-	led_on();
-	HAL_Delay(500);
-	led_off();
-	HAL_Delay(500);
+    printf("\r\n\r\n=== System Booting ===\r\n");
+    led_off();
+    /* 1. Check Wake Reason */
+    if (__HAL_PWR_GET_FLAG(PWR_FLAG_WU) != RESET)
+    {
+        printf("Reason: Woke up from STANDBY (Alarm)\r\n");
+        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+    }
+    else
+    {
+        printf("Reason: Cold Boot (Power On)\r\n");
+    }
 
-	/* ---------------------------------------------------------------------- */
-	/*                           Initialize LoRa                              */
-	/* ---------------------------------------------------------------------- */
-	uint16_t lora_status = lora_init();
+    /* 2. Check the Bank Account (ADC) FIRST */
+    float current_voltage = Battery_GetVoltage(&hadc1);
+    printf("Capacitor Voltage: %.2f V\r\n", current_voltage);
 
+    /* 3. The Decision Logic */
+    if (current_voltage < 3.6f)
+    {
+        /* === BRANCH A: STARVING (SNOOZE) === */
+        printf("Status: Low Energy. Aborting transmission.\r\n");
+        printf("Snoozing for 10 seconds to wait for solar charge...\r\n");
 
-	/* LoRa status indication */
-	if (lora_status != 0)
-	{
-	/* Success → Fast LED blink */
-	led_toggle(100, 5);
-	printf("\r\n\r\n=== LoRa Boot Done! ===\r\n");
-	}
-	else
-	{
-	/* Failure → Solid LED ON */
-	led_on();
-	}
+        led_toggle(50, 5); // Fast warning blink
+        Power_DeepSleep(&hrtc, 10); // Short snooze
+    }
+    else
+    {
+        /* === BRANCH B: HEALTHY (WORK) === */
+        printf("Status: Energy Good. Starting Active Cycle.\r\n");
 
-	/* ---------------------------------------------------------------------- */
-	/*                         Initialize RS485 Sensor                         */
-	/* ---------------------------------------------------------------------- */
-    SHT30_Init();
-    SHT30_SensorReading_t currentReading = {0};
-    printf("\r\n\r\n=== While Loop Execution from this point! ===\r\n");
+        /* NOW it is safe to turn on peripherals */
+        uint16_t lora_status = lora_init();
+        SHT30_Init();
+
+        if (lora_status != 0)
+        {
+            printf("LoRa Boot Done!\r\n");
+            SHT30_SensorReading_t currentReading;
+                    if(SHT30_ReadSensor(&currentReading)==HAL_OK){
+                    	lora_packet_t tx_packet = {0};
+                    	tx_packet.device_id   = Get_STM32_UniqueID();
+                    	tx_packet.sensor_type = SENSOR_TYPE_ENV;
+            			env_payload_t sensor_data;
+            			sensor_data.temperature = currentReading.temperature;
+            			sensor_data.humidity    = currentReading.humidity;
+
+            			tx_packet.payload_length = sizeof(env_payload_t);
+            			memcpy(tx_packet.payload, &sensor_data, tx_packet.payload_length);
+
+            			/* -------------------------------------------------------------- */
+            			/* Calculate Actual Transmission Size               */
+            			/* -------------------------------------------------------------- */
+            			uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
+
+            			/* -------------------------------------------------------------- */
+            			/* Send via LoRa                            */
+            			/* -------------------------------------------------------------- */
+            			lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+
+            			/* -------------------------------------------------------------- */
+            			/* Transmission Indication                     */
+            			/* -------------------------------------------------------------- */
+            			printf("\r\n========== LoRa Packet Sent ==========\r\n");
+            			printf("Device ID     : %lu\r\n", tx_packet.device_id);
+            			printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
+            			printf("Payload Length: %u\r\n", tx_packet.payload_length);
+
+            			printf("\r\n--- Sensor Data ---\r\n");
+            			// Divide by 100 for display formatting
+            			printf("Temperature : %.2f C\r\n", (float)sensor_data.temperature / 100.0f);
+            			printf("Humidity    : %.2f %%\r\n", (float)sensor_data.humidity / 100.0f);
+            			printf("\r\n======================================\r\n\r\n");
+
+            			led_off();
+            			led_toggle(50, 2);
+                    }
+                    else
+                    {
+                        /* Sensor Read Failed */
+                    	printf("Sensor Read Failed");
+//                        led_on();
+                    }
+
+            printf("Transmission complete.\r\n");
+        }
+        else
+        {
+            printf("LoRa Boot Failed!\r\n");
+
+        }
+
+        printf("Active cycle finished. Deep sleeping for 60 seconds...\r\n");
+        Power_DeepSleep(&hrtc, 60); // Long sleep until next scheduled reading
+    }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -181,63 +249,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//        if(SHT30_ReadSensor(&currentReading)==HAL_OK){
-//        	lora_packet_t tx_packet = {0};
-//        	tx_packet.device_id   = Get_STM32_UniqueID();
-//        	tx_packet.sensor_type = SENSOR_TYPE_ENV;
-//			env_payload_t sensor_data;
-//			sensor_data.temperature = currentReading.temperature;
-//			sensor_data.humidity    = currentReading.humidity;
-//
-//			tx_packet.payload_length = sizeof(env_payload_t);
-//			memcpy(tx_packet.payload, &sensor_data, tx_packet.payload_length);
-//
-//			/* -------------------------------------------------------------- */
-//			/* Calculate Actual Transmission Size               */
-//			/* -------------------------------------------------------------- */
-//			uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
-//
-//			/* -------------------------------------------------------------- */
-//			/* Send via LoRa                            */
-//			/* -------------------------------------------------------------- */
-//			lora_send((uint8_t *)&tx_packet, tx_size, 1000);
-//
-//			/* -------------------------------------------------------------- */
-//			/* Transmission Indication                     */
-//			/* -------------------------------------------------------------- */
-//			printf("\r\n========== LoRa Packet Sent ==========\r\n");
-//			printf("Device ID     : %lu\r\n", tx_packet.device_id);
-//			printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
-//			printf("Payload Length: %u\r\n", tx_packet.payload_length);
-//
-//			printf("\r\n--- Sensor Data ---\r\n");
-//			// Divide by 100 for display formatting
-//			printf("Temperature : %.2f C\r\n", (float)sensor_data.temperature / 100.0f);
-//			printf("Humidity    : %.2f %%\r\n", (float)sensor_data.humidity / 100.0f);
-//			printf("\r\n======================================\r\n\r\n");
-//
-//			led_off();
-//			led_toggle(50, 2);
-//        }
-//        else
-//        {
-//            /* Sensor Read Failed */
-//        	printf("Sensor Read Failed");
-//            led_on();
-//        }
-
-
-    	/* Read the voltage */
-    	      float current_voltage = Battery_GetVoltage(&hadc1);
-
-    	      /* Print it to the Serial Monitor */
-    	      printf("Simulated Cap Voltage: %.2f V\r\n", current_voltage);
-
-    	      /* Blink LED to show it's alive */
-    	      led_toggle(50, 1);
-
-    	      /* Wait 1 second before reading again (LAB TEST ONLY) */
-    	      HAL_Delay(10000);
     }
   /* USER CODE END 3 */
 }
