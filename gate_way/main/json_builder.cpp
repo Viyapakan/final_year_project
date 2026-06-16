@@ -33,11 +33,20 @@ String build_sensor_json(lora_packet_t *packet) {
         }
 
         case SENSOR_TYPE_ENV: {
-            // For future expansion! 
+            // Security check: Ensure the payload is exactly the 4 bytes we expect
+            if (packet->payload_length != sizeof(env_payload_t)) {
+                Serial.println("[ERR] ENV Payload size mismatch!");
+                return ""; 
+            }
+            
             doc["sensor_type"] = "ENV_V1";
-            // env_payload_t *env = (env_payload_t *)packet->payload;
-            // data["co2"] = env->co2;
-            // data["voc"] = env->voc;
+            
+            // Map the raw payload bytes to our new struct
+            env_payload_t *env = (env_payload_t *)packet->payload;
+            
+            // Divide by 100.0 to restore the 2 decimal places from the STM32
+            data["temperature_c"] = env->temperature / 100.0;
+            data["humidity_pct"]  = env->humidity / 100.0;
             break;
         }
         

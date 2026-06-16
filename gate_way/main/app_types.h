@@ -31,4 +31,9 @@ typedef struct {
     char payload[MQTT_MAX_PAYLOAD_LEN];
 } mqtt_message_t;
 
+// NEW: Specific Payload Format for Env Sensor (Total size: 4 bytes)
+typedef struct __attribute__((packed)) {
+    uint16_t humidity;   // 2 bytes (MUST BE FIRST)
+    int16_t  temperature; // 2 bytes (MUST BE SECOND)
+} env_payload_t;
 #endif // APP_TYPES_H
