@@ -35,6 +35,46 @@ uint32_t Get_STM32_UniqueID(void)
     return (uid_word0 ^ uid_word1 ^ uid_word2);
 }
 
+
+/* utils.c */
+bool switch_operation(SwitchTarget_t target, SwitchState_t state)
+{
+    GPIO_TypeDef* port;
+    uint16_t pin;
+
+    // 1. Map target to the CubeMX generated pins
+    if (target == TARGET_LORA) {
+        port = LORA_SWITCH_GPIO_Port;
+        pin  = LORA_SWITCH_Pin;
+    } else if (target == TARGET_SENSOR) {
+        port = SENSOR_SWITCH_GPIO_Port;
+        pin  = SENSOR_SWITCH_Pin;
+    } else {
+        return false;
+    }
+
+    // 2. Execute switch (P-Channel Logic: LOW = ON, HIGH = OFF)
+    if (state == SWITCH_ON) {
+        HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
+    } else {
+        HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
+    }
+
+    // 3. Give the capacitors on the LoRa/Sensor modules time to fill up
+    HAL_Delay(20);
+
+    // 4. Verify the pin actually changed state
+    GPIO_PinState current_state = HAL_GPIO_ReadPin(port, pin);
+
+    if ((state == SWITCH_ON) && (current_state == GPIO_PIN_RESET)) {
+        return true;
+    }
+    else if ((state == SWITCH_OFF) && (current_state == GPIO_PIN_SET)) {
+        return true;
+    }
+
+    return false;
+}
 /* ========================================================== */
 /* ============ PRINTF REDIRECTION TO USART1 ================ */
 /* ========================================================== */

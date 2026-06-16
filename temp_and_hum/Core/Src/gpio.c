@@ -60,7 +60,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LORA_RST_GPIO_Port, LORA_RST_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, LORA_RST_Pin|LORA_SWITCH_Pin|SENSOR_SWITCH_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -76,12 +76,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LORA_RST_Pin */
-  GPIO_InitStruct.Pin = LORA_RST_Pin;
+  /*Configure GPIO pins : LORA_RST_Pin LORA_SWITCH_Pin SENSOR_SWITCH_Pin */
+  GPIO_InitStruct.Pin = LORA_RST_Pin|LORA_SWITCH_Pin|SENSOR_SWITCH_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LORA_RST_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LORA_DIO0_Pin */
   GPIO_InitStruct.Pin = LORA_DIO0_Pin;

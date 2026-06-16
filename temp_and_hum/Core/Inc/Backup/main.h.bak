@@ -68,6 +68,10 @@ void Error_Handler(void);
 #define LORA_DIO0_Pin GPIO_PIN_1
 #define LORA_DIO0_GPIO_Port GPIOB
 #define LORA_DIO0_EXTI_IRQn EXTI1_IRQn
+#define LORA_SWITCH_Pin GPIO_PIN_5
+#define LORA_SWITCH_GPIO_Port GPIOB
+#define SENSOR_SWITCH_Pin GPIO_PIN_8
+#define SENSOR_SWITCH_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

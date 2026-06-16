@@ -165,10 +165,10 @@ int main(void)
     {
         /* === BRANCH A: STARVING (SNOOZE) === */
         printf("Status: Low Energy. Aborting transmission.\r\n");
-        printf("Snoozing for 10 seconds to wait for solar charge...\r\n");
+        printf("Snoozing for 900 seconds to wait for solar charge...\r\n");
 
         led_toggle(50, 5); // Fast warning blink
-        Power_DeepSleep(&hrtc, 10); // Short snooze
+        Power_DeepSleep(&hrtc, 900); // Short snooze (15 mins)
     }
     else
     {
@@ -203,7 +203,7 @@ int main(void)
             			/* Send via LoRa                            */
             			/* -------------------------------------------------------------- */
             			lora_send((uint8_t *)&tx_packet, tx_size, 1000);
-
+            			switch_operation(TARGET_SENSOR, SWITCH_OFF);
             			/* -------------------------------------------------------------- */
             			/* Transmission Indication                     */
             			/* -------------------------------------------------------------- */
@@ -236,8 +236,8 @@ int main(void)
 
         }
 
-        printf("Active cycle finished. Deep sleeping for 60 seconds...\r\n");
-        Power_DeepSleep(&hrtc, 60); // Long sleep until next scheduled reading
+        printf("Active cycle finished. Deep sleeping for 1800 seconds...\r\n");
+        Power_DeepSleep(&hrtc, 1800); // Long sleep until next scheduled reading (30 mins)
     }
 
   /* USER CODE END 2 */
@@ -245,11 +245,27 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
     while (1)
-    {
-    /* USER CODE END WHILE */
+      {
+          /* 1. Turn the power ON */
+//          printf("Power switches ON...\r\n");
+//          switch_operation(TARGET_LORA, SWITCH_ON);
+//          switch_operation(TARGET_SENSOR, SWITCH_ON);
+//
+//          // Wait for 3 seconds (3000 milliseconds)
+//          HAL_Delay(3000);
+//
+//          /* 2. Turn the power OFF */
+//          printf("Power switches OFF...\r\n");
+//          switch_operation(TARGET_LORA, SWITCH_OFF);
+//          switch_operation(TARGET_SENSOR, SWITCH_OFF);
+//
+//          // Wait for 3 seconds
+//          HAL_Delay(3000);
 
-    /* USER CODE BEGIN 3 */
-    }
+        /* USER CODE END WHILE */
+
+        /* USER CODE BEGIN 3 */
+      }
   /* USER CODE END 3 */
 }
 

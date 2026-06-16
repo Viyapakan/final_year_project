@@ -11,6 +11,7 @@
 #include "LoRa.h"
 #include "spi.h"
 #include "gpio.h"
+#include "utils.h"
 
 uint16_t lora_init(void);
 uint8_t  lora_send(uint8_t *data, uint8_t length, uint16_t timeout);

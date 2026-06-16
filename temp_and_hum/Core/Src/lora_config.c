@@ -12,6 +12,7 @@ static LoRa myLoRa;
 
 uint16_t lora_init(void)
 {
+    if(switch_operation(TARGET_LORA, SWITCH_ON)){
     myLoRa = newLoRa();
 
     /* NSS (CS) pin */
@@ -33,13 +34,17 @@ uint16_t lora_init(void)
     myLoRa.spredingFactor        = SF_7;
     myLoRa.bandWidth             = BW_125KHz;
     myLoRa.crcRate               = CR_4_5;
-    myLoRa.power                 = POWER_17db; // or POWER_17db if supply limited
+    myLoRa.power                 = POWER_14db; // or POWER_17db if supply limited
     myLoRa.overCurrentProtection = 130;
     myLoRa.preamble              = 8;
 
 
 
     return LoRa_init(&myLoRa);
+    } else {
+        printf("[ERROR] LoRa power switch failed. Unable to initialize LoRa module.\r\n");
+        return 1;
+    }
 }
 
 
