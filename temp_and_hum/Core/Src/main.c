@@ -177,9 +177,10 @@ int main(void)
 
         /* NOW it is safe to turn on peripherals */
         uint16_t lora_status = lora_init();
+        printf("Lora Ststus returned value: %d/n", lora_status);
         SHT30_Init();
 
-        if (lora_status != 0)
+        if (lora_status == LORA_OK)
         {
             printf("LoRa Boot Done!\r\n");
             SHT30_SensorReading_t currentReading;
@@ -202,11 +203,13 @@ int main(void)
             			/* -------------------------------------------------------------- */
             			/* Send via LoRa                            */
             			/* -------------------------------------------------------------- */
-            			lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+            			uint8_t lora_status= lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+//            			uint8_t tx_status = lora_send((uint8_t *)&tx_packet, tx_size, 1000);
             			switch_operation(TARGET_SENSOR, SWITCH_OFF);
             			/* -------------------------------------------------------------- */
             			/* Transmission Indication                     */
             			/* -------------------------------------------------------------- */
+            			if (lora_status==1){
             			printf("\r\n========== LoRa Packet Sent ==========\r\n");
             			printf("Device ID     : %lu\r\n", tx_packet.device_id);
             			printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
@@ -220,6 +223,10 @@ int main(void)
 
             			led_off();
             			led_toggle(50, 2);
+            			}else {
+            			    printf("The lora return value is: %d\n", lora_status);
+            				printf("\r\n[ERROR] LoRa TX Timeout! (TxDone was never set by the module)\r\n\r\n");
+            			}
                     }
                     else
                     {
@@ -262,9 +269,9 @@ int main(void)
 //          // Wait for 3 seconds
 //          HAL_Delay(3000);
 
-        /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-        /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
       }
   /* USER CODE END 3 */
 }

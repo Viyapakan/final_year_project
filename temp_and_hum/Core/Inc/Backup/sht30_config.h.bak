@@ -9,6 +9,7 @@
 #define INC_SHT30_CONFIG_H_
 
 #include "main.h"
+#include "utils.h"
 
 /* SHT30 I2C Address (0x44 << 1) */
 #define SHT30_I2C_ADDR (0x44 << 1)

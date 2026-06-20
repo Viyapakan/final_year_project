@@ -141,7 +141,7 @@ int main(void)
     /* ---------------------------------------------------------------------- */
     uint16_t lora_status = lora_init();
 
-
+    printf("Lora returned Value : %d", lora_status);
     /* LoRa status indication */
     if (lora_status != 0)
     {

@@ -18,17 +18,35 @@ extern I2C_HandleTypeDef hi2c1;
 HAL_StatusTypeDef SHT30_Init(void)
 {
     /* The STM32 HAL already initializes the I2C peripheral hardware.
-       We can optionally send a Soft Reset command (0x30A2) to the SHT30 here
-       to ensure a clean state upon boot. */
+       Optionally send a Soft Reset command (0x30A2) to ensure a clean state. */
 
-    uint8_t reset_cmd[2] = {0x30, 0xA2};
-    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, SHT30_I2C_ADDR, reset_cmd, 2, 100);
+    if (switch_operation(TARGET_SENSOR, SWITCH_ON))
+    {
+        uint8_t reset_cmd[2] = {0x30, 0xA2};
 
-    if (status == HAL_OK) {
-        HAL_Delay(2); /* SHT30 requires a max of 1.5ms to reset */
+        HAL_StatusTypeDef status =
+            HAL_I2C_Master_Transmit(&hi2c1,
+                                    SHT30_I2C_ADDR,
+                                    reset_cmd,
+                                    2,
+                                    100);
+
+        if (status == HAL_OK)
+        {
+            HAL_Delay(2);   // SHT30 requires max 1.5 ms reset time
+        }
+        else
+        {
+            printf("[ERROR] SHT30 reset command transmission failed.\r\n");
+        }
+
+        return status;
     }
-
-    return status;
+    else
+    {
+        printf("[ERROR] Sensor power switch failed. Unable to initialize SHT30.\r\n");
+        return HAL_ERROR;
+    }
 }
 
 HAL_StatusTypeDef SHT30_ReadSensor(SHT30_SensorReading_t *reading)
@@ -66,5 +84,7 @@ HAL_StatusTypeDef SHT30_ReadSensor(SHT30_SensorReading_t *reading)
     reading->temperature = (int16_t)(temp_c * 100.0f);
     reading->humidity    = (uint16_t)(hum_rh * 100.0f);
 
+
+    switch_operation(TARGET_SENSOR, SWITCH_OFF);
     return HAL_OK;
 }
