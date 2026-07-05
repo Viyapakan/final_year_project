@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "pin_config.h"
 #include "app_types.h"
 
@@ -21,6 +23,10 @@ constexpr int  LORA_SYNC_WORD      = 0xF3;  // Custom network sync word
 // Expose the FreeRTOS Queue handle globally so the Cloud task can read from it
 extern QueueHandle_t sensorDataQueue;
 
+// [FIX] SPI mutex — guards all LoRa SPI transactions against concurrent access
+// from other tasks/ISRs that might also touch the SPI bus.
+extern SemaphoreHandle_t lora_spi_mutex;
+
 
 // Function prototype
 bool init_lora();
@@ -30,4 +36,4 @@ void debug_lora_registers();
 void start_lora_rx();
 void process_lora_interrupt();
 
-#endif // LORA_UTILS_H
+#endif // LORA_UTILS_H

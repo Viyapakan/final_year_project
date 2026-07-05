@@ -51,11 +51,22 @@ void debug_lora_registers() {
 }
 
 
+// [FIX] SPI mutex definition — guards all LoRa SPI transactions.
+SemaphoreHandle_t lora_spi_mutex = NULL;
+
 void start_lora_rx() {
     // 1. Update queue to hold the new Envelope struct (54 bytes max per message)
     sensorDataQueue = xQueueCreate(20, sizeof(lora_packet_t));
     if (sensorDataQueue == NULL) {
         Serial.println("[CRITICAL] Failed to create FreeRTOS Sensor Data Queue!");
+        return;
+    }
+
+    // [FIX] Create the SPI bus mutex to prevent concurrent SPI access
+    // corrupting the SX1278 state machine (root cause of "Dropped packet" errors).
+    lora_spi_mutex = xSemaphoreCreateMutex();
+    if (lora_spi_mutex == NULL) {
+        Serial.println("[CRITICAL] Failed to create LoRa SPI mutex!");
         return;
     }
 
@@ -107,17 +118,39 @@ void start_lora_rx() {
 // }
 
 
+
 void process_lora_interrupt() {
+    // [FIX] Watchdog: track the last time we had any LoRa radio activity.
+    // If DIO0 never fires for 10 minutes, the SX1278 has likely frozen in
+    // standby mode (happens after a corrupted receive). Re-arm it.
+    static uint32_t last_lora_activity_ms = 0;
+
     // Failsafe: If the pin is physically stuck HIGH but our flag was missed, force a read.
     if (!lora_packet_ready) {
         if (digitalRead(LORA_DIO0) == HIGH) {
             lora_packet_ready = true;
         } else {
+            // [FIX] RX Watchdog check (only when radio is idle / no interrupt pending)
+            if ((millis() - last_lora_activity_ms) > 600000UL) { // 10 minutes
+                Serial.println("[WARN] LoRa RX watchdog: No activity for 10min. Re-arming receiver.");
+                LoRa.receive();
+                last_lora_activity_ms = millis();
+            }
             return;
         }
     }
-    
+
     lora_packet_ready = false;
+    last_lora_activity_ms = millis(); // Reset watchdog on every real interrupt
+
+    // [FIX] Guard the entire SPI transaction with the mutex.
+    // A 100ms timeout prevents deadlocks; if we can't get the bus, we skip
+    // this interrupt — the watchdog will recover if this happens repeatedly.
+    if (xSemaphoreTake(lora_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        Serial.println("[WARN] LoRa SPI mutex timeout. Skipping this interrupt.");
+        LoRa.receive(); // Still re-arm the radio
+        return;
+    }
 
     int packetSize = LoRa.parsePacket();
     int header_size = offsetof(lora_packet_t, payload);
@@ -144,4 +177,6 @@ void process_lora_interrupt() {
 
     // Reset the radio state machine back to continuous listening mode
     LoRa.receive();
+
+    xSemaphoreGive(lora_spi_mutex);
 }
