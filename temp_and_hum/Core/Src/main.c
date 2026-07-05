@@ -161,7 +161,7 @@ int main(void)
     printf("Capacitor Voltage: %.2f V\r\n", current_voltage);
 
     /* 3. The Decision Logic */
-    if (current_voltage < 3.6f)
+    if (current_voltage < 3.5f)
     {
         /* === BRANCH A: STARVING (SNOOZE) === */
         printf("Status: Low Energy. Aborting transmission.\r\n");
@@ -243,8 +243,8 @@ int main(void)
 
         }
 
-        printf("Active cycle finished. Deep sleeping for 1800 seconds...\r\n");
-        Power_DeepSleep(&hrtc, 1800); // Long sleep until next scheduled reading (30 mins)
+        printf("Active cycle finished. Deep sleeping for 180 seconds...\r\n");
+        Power_DeepSleep(&hrtc, 180); // Long sleep until next scheduled reading (30 mins)
     }
 
   /* USER CODE END 2 */
