@@ -33,20 +33,22 @@ String build_sensor_json(lora_packet_t *packet) {
         }
 
         case SENSOR_TYPE_ENV: {
-            // Security check: Ensure the payload is exactly the 4 bytes we expect
+            // Security check: Ensure the payload is exactly the 6 bytes we expect
             if (packet->payload_length != sizeof(env_payload_t)) {
-                Serial.println("[ERR] ENV Payload size mismatch!");
-                return ""; 
+                Serial.printf("[ERR] ENV Payload size mismatch! Got %d, expected %d\n",
+                              packet->payload_length, (int)sizeof(env_payload_t));
+                return "";
             }
-            
+
             doc["sensor_type"] = "ENV_V1";
-            
-            // Map the raw payload bytes to our new struct
+
+            // Cast raw payload bytes directly to the packed struct (zero-copy)
             env_payload_t *env = (env_payload_t *)packet->payload;
-            
-            // Divide by 100.0 to restore the 2 decimal places from the STM32
+
+            // All values are scaled x100 on the STM32 — divide to restore decimals
             data["temperature_c"] = env->temperature / 100.0;
-            data["humidity_pct"]  = env->humidity / 100.0;
+            data["humidity_pct"]  = env->humidity    / 100.0;
+            data["cap_voltage"]   = env->cap_voltage / 100.0;
             break;
         }
         
@@ -92,12 +94,16 @@ bool build_sensor_json_to_buf(lora_packet_t *packet, char *buf, size_t buf_len) 
 
         case SENSOR_TYPE_ENV: {
             if (packet->payload_length != sizeof(env_payload_t)) {
+                Serial.printf("[ERR] ENV Payload size mismatch! Got %d, expected %d\n",
+                              packet->payload_length, (int)sizeof(env_payload_t));
                 return false;
             }
             doc["sensor_type"] = "ENV_V1";
             env_payload_t *env = (env_payload_t *)packet->payload;
+            // All values are scaled x100 on the STM32 — divide to restore decimals
             data["temperature_c"] = env->temperature / 100.0;
             data["humidity_pct"]  = env->humidity    / 100.0;
+            data["cap_voltage"]   = env->cap_voltage / 100.0;
             break;
         }
 
