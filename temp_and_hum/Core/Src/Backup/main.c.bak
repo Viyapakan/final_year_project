@@ -1,81 +1,80 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
+#include "gpio.h"
 #include "i2c.h"
 #include "rtc.h"
 #include "spi.h"
 #include "usart.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "utils.h"
+#include "battery_monitor.h"
 #include "lora_config.h"
+#include "power_management.h"
 #include "rs485_config.h"
 #include "sht30_config.h"
-#include "battery_monitor.h"
-#include "power_management.h"
+#include "utils.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include <stddef.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-#define LORA_MAX_PAYLOAD      48
-#define SENSOR_TYPE_SOIL      0x01
-#define SENSOR_TYPE_ENV       0x02
+#define LORA_MAX_PAYLOAD 48
+#define SENSOR_TYPE_SOIL 0x01
+#define SENSOR_TYPE_ENV 0x02
 
 /* -------------------------------------------------------------------------- */
 /*                          General LoRa Packet Format                        */
 /* -------------------------------------------------------------------------- */
-typedef struct __attribute__((packed))
-{
-    uint32_t device_id;
-    uint8_t  sensor_type;
-    uint8_t  payload_length;
-    uint8_t  payload[LORA_MAX_PAYLOAD];
+typedef struct __attribute__((packed)) {
+  uint32_t device_id;
+  uint8_t sensor_type;
+  uint8_t payload_length;
+  uint8_t payload[LORA_MAX_PAYLOAD];
 
 } lora_packet_t;
 
 /* -------------------------------------------------------------------------- */
 /*                        Soil Sensor Payload Structure                       */
 /* -------------------------------------------------------------------------- */
-typedef struct __attribute__((packed))
-{
-    uint16_t humidity;
-    int16_t  temperature;
-    uint16_t ec;
+typedef struct __attribute__((packed)) {
+  uint16_t humidity;
+  int16_t temperature;
+  uint16_t ec;
 } soil_payload_t;
 
 /* -------------------------------------------------------------------------- */
 /* Environment Sensor Payload Structure                    */
 /* -------------------------------------------------------------------------- */
-typedef struct __attribute__((packed))
-{
-    uint16_t humidity;
-    int16_t  temperature;
+typedef struct __attribute__((packed)) {
+  uint16_t humidity;
+  int16_t temperature;
+  uint16_t cap_voltage;
 } env_payload_t;
 /* USER CODE END PTD */
 
@@ -107,11 +106,10 @@ void SystemClock_Config(void);
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
   /* USER CODE BEGIN 1 */
 
@@ -119,7 +117,8 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
+   */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -143,153 +142,149 @@ int main(void)
   MX_I2C1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-    printf("\r\n\r\n=== System Booting ===\r\n");
-    led_off();
-    /* 1. Check Wake Reason */
-    if (__HAL_PWR_GET_FLAG(PWR_FLAG_WU) != RESET)
-    {
-        printf("Reason: Woke up from STANDBY (Alarm)\r\n");
-        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-    }
-    else
-    {
-        printf("Reason: Cold Boot (Power On)\r\n");
-    }
+  printf("\r\n\r\n=== System Booting ===\r\n");
+  led_off();
+  /* 1. Check Wake Reason */
+  if (__HAL_PWR_GET_FLAG(PWR_FLAG_WU) != RESET) {
+    printf("Reason: Woke up from STANDBY (Alarm)\r\n");
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+  } else {
+    printf("Reason: Cold Boot (Power On)\r\n");
+  }
 
-    /* 2. Check the Bank Account (ADC) FIRST */
-    float current_voltage = Battery_GetVoltage(&hadc1);
-    printf("Capacitor Voltage: %.2f V\r\n", current_voltage);
+  /* 2. Check the Bank Account (ADC) FIRST */
+  float current_voltage = Battery_GetVoltage(&hadc1);
+  printf("Capacitor Voltage: %.2f V\r\n", current_voltage);
 
-    /* 3. The Decision Logic */
-    if (current_voltage < 3.6f)
-    {
-        /* === BRANCH A: STARVING (SNOOZE) === */
-        printf("Status: Low Energy. Aborting transmission.\r\n");
-        printf("Snoozing for 900 seconds to wait for solar charge...\r\n");
+  /* 3. The Decision Logic */
+  if (current_voltage < 3.5f) {
+    /* === BRANCH A: STARVING (SNOOZE) === */
+    printf("Status: Low Energy. Aborting transmission.\r\n");
+    printf("Snoozing for 900 seconds to wait for solar charge...\r\n");
 
-        led_toggle(50, 5); // Fast warning blink
-        Power_DeepSleep(&hrtc, 900); // Short snooze (15 mins)
-    }
-    else
-    {
-        /* === BRANCH B: HEALTHY (WORK) === */
-        printf("Status: Energy Good. Starting Active Cycle.\r\n");
+    led_toggle(50, 5);           // Fast warning blink
+    Power_DeepSleep(&hrtc, 900); // Short snooze (15 mins)
+  } else {
+    /* === BRANCH B: HEALTHY (WORK) === */
+    printf("Status: Energy Good. Starting Active Cycle.\r\n");
 
-        /* NOW it is safe to turn on peripherals */
-        uint16_t lora_status = lora_init();
-        printf("Lora Ststus returned value: %d/n", lora_status);
-        SHT30_Init();
+    /* NOW it is safe to turn on peripherals */
+    uint16_t lora_status = lora_init();
+    printf("Lora Ststus returned value: %d/n", lora_status);
+    SHT30_Init();
 
-        if (lora_status == LORA_OK)
-        {
-            printf("LoRa Boot Done!\r\n");
-            SHT30_SensorReading_t currentReading;
-                    if(SHT30_ReadSensor(&currentReading)==HAL_OK){
-                    	lora_packet_t tx_packet = {0};
-                    	tx_packet.device_id   = Get_STM32_UniqueID();
-                    	tx_packet.sensor_type = SENSOR_TYPE_ENV;
-            			env_payload_t sensor_data;
-            			sensor_data.temperature = currentReading.temperature;
-            			sensor_data.humidity    = currentReading.humidity;
+    if (lora_status == LORA_OK) {
+      printf("LoRa Boot Done!\r\n");
+      SHT30_SensorReading_t currentReading;
+      if (SHT30_ReadSensor(&currentReading) == HAL_OK) {
+        lora_packet_t tx_packet = {0};
+        tx_packet.device_id = Get_STM32_UniqueID();
+        tx_packet.sensor_type = SENSOR_TYPE_ENV;
+        env_payload_t sensor_data;
+        sensor_data.temperature = currentReading.temperature;
+        sensor_data.humidity = currentReading.humidity;
+        sensor_data.cap_voltage = (uint16_t)(current_voltage * 100.0f);
 
-            			tx_packet.payload_length = sizeof(env_payload_t);
-            			memcpy(tx_packet.payload, &sensor_data, tx_packet.payload_length);
+        tx_packet.payload_length = sizeof(env_payload_t);
+        memcpy(tx_packet.payload, &sensor_data, tx_packet.payload_length);
 
-            			/* -------------------------------------------------------------- */
-            			/* Calculate Actual Transmission Size               */
-            			/* -------------------------------------------------------------- */
-            			uint8_t tx_size = offsetof(lora_packet_t, payload) + tx_packet.payload_length;
+        /* -------------------------------------------------------------- */
+        /* Calculate Actual Transmission Size               */
+        /* -------------------------------------------------------------- */
+        uint8_t tx_size =
+            offsetof(lora_packet_t, payload) + tx_packet.payload_length;
 
-            			/* -------------------------------------------------------------- */
-            			/* Send via LoRa                            */
-            			/* -------------------------------------------------------------- */
-            			uint8_t lora_status= lora_send((uint8_t *)&tx_packet, tx_size, 1000);
-//            			uint8_t tx_status = lora_send((uint8_t *)&tx_packet, tx_size, 1000);
-            			switch_operation(TARGET_SENSOR, SWITCH_OFF);
-            			/* -------------------------------------------------------------- */
-            			/* Transmission Indication                     */
-            			/* -------------------------------------------------------------- */
-            			if (lora_status==1){
-            			printf("\r\n========== LoRa Packet Sent ==========\r\n");
-            			printf("Device ID     : %lu\r\n", tx_packet.device_id);
-            			printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
-            			printf("Payload Length: %u\r\n", tx_packet.payload_length);
+        /* -------------------------------------------------------------- */
+        /* Send via LoRa                            */
+        /* -------------------------------------------------------------- */
+        uint8_t lora_status = lora_send((uint8_t *)&tx_packet, tx_size, 1000);
+        //            			uint8_t tx_status = lora_send((uint8_t
+        //            *)&tx_packet, tx_size, 1000);
+        switch_operation(TARGET_SENSOR, SWITCH_OFF);
+        /* -------------------------------------------------------------- */
+        /* Transmission Indication                     */
+        /* -------------------------------------------------------------- */
+        if (lora_status == 1) {
+          printf("\r\n========== LoRa Packet Sent ==========\r\n");
+          printf("Device ID     : %lu\r\n", tx_packet.device_id);
+          printf("Sensor Type   : %u\r\n", tx_packet.sensor_type);
+          printf("Payload Length: %u\r\n", tx_packet.payload_length);
 
-            			printf("\r\n--- Sensor Data ---\r\n");
-            			// Divide by 100 for display formatting
-            			printf("Temperature : %.2f C\r\n", (float)sensor_data.temperature / 100.0f);
-            			printf("Humidity    : %.2f %%\r\n", (float)sensor_data.humidity / 100.0f);
-            			printf("\r\n======================================\r\n\r\n");
+          printf("\r\n--- Sensor Data ---\r\n");
+          // Divide by 100 for display formatting
+          printf("Temperature : %.2f C\r\n",
+                 (float)sensor_data.temperature / 100.0f);
+          printf("Humidity    : %.2f %%\r\n",
+                 (float)sensor_data.humidity / 100.0f);
+          printf("Cap Voltage : %.2f V\r\n",
+                 (float)sensor_data.cap_voltage / 100.0f);
+          printf("\r\n======================================\r\n\r\n");
 
-            			led_off();
-            			led_toggle(50, 2);
-            			}else {
-            			    printf("The lora return value is: %d\n", lora_status);
-            				printf("\r\n[ERROR] LoRa TX Timeout! (TxDone was never set by the module)\r\n\r\n");
-            			}
-                    }
-                    else
-                    {
-                        /* Sensor Read Failed */
-                    	printf("Sensor Read Failed");
-//                        led_on();
-                    }
-
-            printf("Transmission complete.\r\n");
+          led_off();
+          led_toggle(50, 2);
+        } else {
+          printf("The lora return value is: %d\n", lora_status);
+          printf("\r\n[ERROR] LoRa TX Timeout! (TxDone was never set by the "
+                 "module)\r\n\r\n");
         }
-        else
-        {
-            printf("LoRa Boot Failed!\r\n");
+      } else {
+        /* Sensor Read Failed */
+        printf("Sensor Read Failed");
+        //                        led_on();
+      }
 
-        }
-
-        printf("Active cycle finished. Deep sleeping for 1800 seconds...\r\n");
-        Power_DeepSleep(&hrtc, 1800); // Long sleep until next scheduled reading (30 mins)
+      printf("Transmission complete.\r\n");
+    } else {
+      printf("LoRa Boot Failed!\r\n");
     }
+
+    printf("Active cycle finished. Deep sleeping for 180 seconds...\r\n");
+    Power_DeepSleep(&hrtc,
+                    180); // Long sleep until next scheduled reading (30 mins)
+  }
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    while (1)
-      {
-          /* 1. Turn the power ON */
-//          printf("Power switches ON...\r\n");
-//          switch_operation(TARGET_LORA, SWITCH_ON);
-//          switch_operation(TARGET_SENSOR, SWITCH_ON);
-//
-//          // Wait for 3 seconds (3000 milliseconds)
-//          HAL_Delay(3000);
-//
-//          /* 2. Turn the power OFF */
-//          printf("Power switches OFF...\r\n");
-//          switch_operation(TARGET_LORA, SWITCH_OFF);
-//          switch_operation(TARGET_SENSOR, SWITCH_OFF);
-//
-//          // Wait for 3 seconds
-//          HAL_Delay(3000);
+  while (1) {
+    /* 1. Turn the power ON */
+    //          printf("Power switches ON...\r\n");
+    //          switch_operation(TARGET_LORA, SWITCH_ON);
+    //          switch_operation(TARGET_SENSOR, SWITCH_ON);
+    //
+    //          // Wait for 3 seconds (3000 milliseconds)
+    //          HAL_Delay(3000);
+    //
+    //          /* 2. Turn the power OFF */
+    //          printf("Power switches OFF...\r\n");
+    //          switch_operation(TARGET_LORA, SWITCH_OFF);
+    //          switch_operation(TARGET_SENSOR, SWITCH_OFF);
+    //
+    //          // Wait for 3 seconds
+    //          HAL_Delay(3000);
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-      }
+  }
   /* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
+   * in the RCC_OscInitTypeDef structure.
+   */
+  RCC_OscInitStruct.OscillatorType =
+      RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -297,29 +292,26 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                                RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC | RCC_PERIPHCLK_ADC;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
     Error_Handler();
   }
 }
@@ -328,36 +320,33 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
 
-    __disable_irq();
+  __disable_irq();
 
-    while (1)
-    {
-    }
+  while (1) {
+  }
 
   /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
 
-    /* Example:
-       printf("Wrong parameters value: file %s on line %d\r\n", file, line);
-    */
+  /* Example:
+     printf("Wrong parameters value: file %s on line %d\r\n", file, line);
+  */
 
   /* USER CODE END 6 */
 }
