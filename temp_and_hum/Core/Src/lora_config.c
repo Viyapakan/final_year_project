@@ -110,3 +110,11 @@ int lora_get_rssi(void)
 {
     return LoRa_getRSSI(&myLoRa);
 }
+
+void lora_sleep(void)
+{
+    /* Put the SX1278 into its lowest power SLEEP_MODE before cutting power.
+     * STANDBY: ~1.6 mA  →  SLEEP: ~0.2 µA
+     * This also ensures the chip's internal state machine completes cleanly. */
+    LoRa_gotoMode(&myLoRa, SLEEP_MODE);
+}

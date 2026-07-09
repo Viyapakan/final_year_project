@@ -18,5 +18,6 @@ uint8_t  lora_send(uint8_t *data, uint8_t length, uint16_t timeout);
 uint8_t  lora_receive(uint8_t *data, uint8_t length);
 int      lora_get_rssi(void);
 
+void     lora_sleep(void);
 
 #endif /* INC_LORA_CONFIG_H_ */

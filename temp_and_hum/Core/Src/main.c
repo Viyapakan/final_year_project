@@ -31,7 +31,7 @@
 #include "battery_monitor.h"
 #include "lora_config.h"
 #include "power_management.h"
-#include "rs485_config.h"
+//#include "rs485_config.h"
 #include "sht30_config.h"
 #include "utils.h"
 #include <stddef.h>
@@ -197,6 +197,9 @@ int main(void)
         uint8_t lora_status = lora_send((uint8_t *)&tx_packet, tx_size, 1000);
         //            			uint8_t tx_status = lora_send((uint8_t
         //            *)&tx_packet, tx_size, 1000);
+        lora_sleep();                                   // SX1278 → SLEEP (0.2µA)
+        switch_operation(TARGET_LORA, SWITCH_OFF);      // Cut LoRa power rail
+
         switch_operation(TARGET_SENSOR, SWITCH_OFF);
         /* -------------------------------------------------------------- */
         /* Transmission Indication                     */
@@ -235,9 +238,9 @@ int main(void)
       printf("LoRa Boot Failed!\r\n");
     }
 
-    printf("Active cycle finished. Deep sleeping for 180 seconds...\r\n");
+    printf("Active cycle finished. Deep sleeping for 30 seconds...\r\n");
     Power_DeepSleep(&hrtc,
-                    3600); // Long sleep until next scheduled reading (30 mins)
+                    30); // Long sleep until next scheduled reading (30 mins)
   }
 
   /* USER CODE END 2 */

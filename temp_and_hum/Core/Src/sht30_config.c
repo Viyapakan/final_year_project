@@ -52,7 +52,9 @@ HAL_StatusTypeDef SHT30_Init(void)
 HAL_StatusTypeDef SHT30_ReadSensor(SHT30_SensorReading_t *reading)
 {
     /* SHT30 Command: Single Shot, High Repeatability, Clock Stretching Disabled (0x2400) */
-    uint8_t cmd[2] = {0x24, 0x00};
+//    uint8_t cmd[2] = {0x24, 0x00};
+	uint8_t cmd[2] = {0x24, 0x16};
+
     uint8_t rx_data[6];
 
     /* 1. Send measurement command */
@@ -62,7 +64,9 @@ HAL_StatusTypeDef SHT30_ReadSensor(SHT30_SensorReading_t *reading)
     }
 
     /* 2. Wait for measurement to complete (High repeatability takes ~15ms max) */
-    HAL_Delay(15);
+//    HAL_Delay(15);
+    HAL_Delay(4);
+
 
     /* 3. Read 6 bytes from the sensor
        [0] Temp MSB, [1] Temp LSB, [2] Temp CRC
