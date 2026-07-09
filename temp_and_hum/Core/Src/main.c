@@ -138,7 +138,10 @@ int main(void)
   MX_USART1_UART_Init();
   MX_I2C1_Init();
   MX_ADC1_Init();
+
   /* USER CODE BEGIN 2 */
+  HAL_ADCEx_Calibration_Start(&hadc1);   // ← add this line
+
   printf("\r\n\r\n=== System Booting ===\r\n");
   led_off();
   /* 1. Check Wake Reason */
@@ -240,7 +243,7 @@ int main(void)
 
     printf("Active cycle finished. Deep sleeping for 30 seconds...\r\n");
     Power_DeepSleep(&hrtc,
-                    30); // Long sleep until next scheduled reading (30 mins)
+                    3600); // Long sleep until next scheduled reading (30 mins)
   }
 
   /* USER CODE END 2 */
