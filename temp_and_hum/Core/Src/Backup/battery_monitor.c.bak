@@ -13,7 +13,7 @@
  * DIVIDER_MULTIPLIER: 2.0 because we use a 1M / 1M divider (cuts voltage in half)
  * ADC_MAX: 4095.0 for a 12-bit ADC
  */
-#define VREF 3.067f
+#define VREF 3.31f
 #define DIVIDER_MULTIPLIER 2.0f
 #define ADC_MAX 4095.0f
 
